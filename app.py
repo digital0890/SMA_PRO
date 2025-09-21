@@ -393,23 +393,36 @@ with main_container:
     avg_range = data["Candle_Range"].mean() if len(data)>0 else 0
     offset = avg_range * 0.2
 
-    fig.add_trace(go.Scatter(
-        x=data.index[supply_idx_filtered],
-        y=data['High'].iloc[supply_idx_filtered] + offset,
-        mode='markers',
-        marker=dict(symbol='triangle-down', color='rgba(251,113,133,0.95)', size=14, line=dict(width=2, color='white')),
-        name='Supply Zone',
-        hovertemplate='<b>Supply Zone</b><br>Price: %{y:.2f}<br>Time: %{x}<extra></extra>'
-    ), row=1, col=1)
+# Supply Zone
+fig.add_trace(go.Scatter(
+    x=data.index[supply_idx_filtered],
+    y=data['High'].iloc[supply_idx_filtered] + offset,
+    mode='markers',
+    marker=dict(
+        symbol='triangle-down',
+        color='rgba(251,113,133,0.95)',
+        size=14,
+        line=dict(width=2, color='rgba(251,113,133,0.95)')  # هم‌رنگ مثلث
+    ),
+    name='Supply Zone',
+    hovertemplate='<b>Supply Zone</b><br>Price: %{y:.2f}<br>Time: %{x}<extra></extra>'
+), row=1, col=1)
 
-    fig.add_trace(go.Scatter(
-        x=data.index[demand_idx_filtered],
-        y=data['Low'].iloc[demand_idx_filtered] - offset,
-        mode='markers',
-        marker=dict(symbol='triangle-up', color='rgba(110,231,183,0.95)', size=14, line=dict(width=2, color='white')),
-        name='Demand Zone',
-        hovertemplate='<b>Demand Zone</b><br>Price: %{y:.2f}<br>Time: %{x}<extra></extra>'
-    ), row=1, col=1)
+# Demand Zone
+fig.add_trace(go.Scatter(
+    x=data.index[demand_idx_filtered],
+    y=data['Low'].iloc[demand_idx_filtered] - offset,
+    mode='markers',
+    marker=dict(
+        symbol='triangle-up',
+        color='rgba(110,231,183,0.95)',
+        size=14,
+        line=dict(width=2, color='rgba(110,231,183,0.95)')  # هم‌رنگ مثلث
+    ),
+    name='Demand Zone',
+    hovertemplate='<b>Demand Zone</b><br>Price: %{y:.2f}<br>Time: %{x}<extra></extra>'
+), row=1, col=1)
+
 
     fig.add_trace(go.Bar(
         x=up.index,
