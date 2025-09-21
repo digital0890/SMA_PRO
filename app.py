@@ -383,10 +383,10 @@ with main_container:
         low=data['Low'],
         close=data['Close'],
         name="Price",
-        increasing_line_color=ACCENT,
-        decreasing_line_color=ERROR,
-        increasing_fillcolor=ACCENT,
-        decreasing_fillcolor=ERROR
+        increasing_line_color="rgba(110,231,183,0.7)",  # تیره‌تر از قبل
+        decreasing_line_color="rgba(251,113,133,0.7)",  # تیره‌تر از قبل
+        increasing_fillcolor="rgba(110,231,183,0.6)",  # تیره‌تر و کمی شفاف
+        decreasing_fillcolor="rgba(251,113,133,0.6)"   # تیره‌تر و کمی شفاف
     ), row=1, col=1)
 
     data["Candle_Range"] = data["High"] - data["Low"]
