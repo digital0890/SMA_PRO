@@ -210,12 +210,13 @@ with main_container:
     demand_idx_filtered = [i for i in demand_idx if data['Volume'].iloc[i] > data['Volume_MA20'].iloc[i]]
 
     # -------------------------------
-    # Chart
+    # Chart (no subplot titles, no blue box)
     # -------------------------------
-    fig = make_subplots(rows=2, cols=1, shared_xaxes=True,
-                        vertical_spacing=0.05,
-                        row_heights=[0.72,0.28],
-                        subplot_titles=(f"{symbol} Candlestick Chart", "Volume"))
+    fig = make_subplots(
+        rows=2, cols=1, shared_xaxes=True,
+        vertical_spacing=0.05,
+        row_heights=[0.72,0.28]
+    )
 
     fig.add_trace(go.Candlestick(
         x=data.index,
@@ -285,7 +286,7 @@ with main_container:
         barmode="overlay",
         hovermode='x unified',
         legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
-        margin=dict(l=40, r=24, t=80, b=40),
+        margin=dict(l=40, r=24, t=40, b=40),
         transition={'duration': 400, 'easing': 'cubic-in-out'}
     )
 
