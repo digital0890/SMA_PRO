@@ -158,7 +158,7 @@ with st.sidebar:
     
     st.markdown("---")
     
-    symbols = ["Gold","BTC/USD", "ETH/USD", "BNB/USD", "XRP/USD", "ADA/USD"]
+    symbols = ["BTC/USD", "ETH/USD", "BNB/USD", "XRP/USD", "ADA/USD", "Gold"]
     symbol = st.selectbox("**Select Symbol**", options=symbols, index=1, help="Choose the asset to analyze")
     
     timeframe = st.selectbox("**Timeframe**", options=["1m","5m","15m","30m","1h","4h","1d"], index=4, help="Select the chart timeframe")
@@ -393,20 +393,32 @@ with main_container:
     avg_range = data["Candle_Range"].mean() if len(data)>0 else 0
     offset = avg_range * 0.2
 
+    # Supply markers with matching border color
     fig.add_trace(go.Scatter(
         x=data.index[supply_idx_filtered],
         y=data['High'].iloc[supply_idx_filtered] + offset,
         mode='markers',
-        marker=dict(symbol='triangle-down', color='rgba(251,113,133,0.95)', size=14, line=dict(width=2, color='white')),
+        marker=dict(
+            symbol='triangle-down', 
+            color='rgba(251,113,133,0.95)', 
+            size=14, 
+            line=dict(width=2, color='rgba(251,113,133,1)')  # Border matches fill color
+        ),
         name='Supply Zone',
         hovertemplate='<b>Supply Zone</b><br>Price: %{y:.2f}<br>Time: %{x}<extra></extra>'
     ), row=1, col=1)
 
+    # Demand markers with matching border color
     fig.add_trace(go.Scatter(
         x=data.index[demand_idx_filtered],
         y=data['Low'].iloc[demand_idx_filtered] - offset,
         mode='markers',
-        marker=dict(symbol='triangle-up', color='rgba(110,231,183,0.95)', size=14, line=dict(width=2, color='white')),
+        marker=dict(
+            symbol='triangle-up', 
+            color='rgba(110,231,183,0.95)', 
+            size=14, 
+            line=dict(width=2, color='rgba(110,231,183,1)')  # Border matches fill color
+        ),
         name='Demand Zone',
         hovertemplate='<b>Demand Zone</b><br>Price: %{y:.2f}<br>Time: %{x}<extra></extra>'
     ), row=1, col=1)
