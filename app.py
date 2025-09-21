@@ -8,11 +8,11 @@ import time
 from datetime import datetime, timedelta
 
 # --------------------------------------------------
-# Dark Modern Themed Streamlit App
+# Dark Modern Themed Streamlit App - Enhanced UI
 # --------------------------------------------------
 
 # -------------------------------
-# Styling & Theme (Dark Modern)
+# Enhanced Styling & Theme (Dark Modern)
 # -------------------------------
 FONT_IMPORT = "@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Poppins:wght@400;600&display=swap');"
 
@@ -26,7 +26,7 @@ ERROR = "#FB7185"
 
 CUSTOM_CSS = f"""
 {FONT_IMPORT}
-:root{{
+:root {{
   --bg: {DARK_BG};
   --card: {CARD_BG};
   --accent: {ACCENT};
@@ -51,12 +51,91 @@ CUSTOM_CSS = f"""
 .streamlit-card {{
   background: var(--card);
   border-radius: 12px;
-  padding: 18px;
+  padding: 22px;
   box-shadow: 0 6px 18px rgba(2,6,12,0.6);
   border: 1px solid rgba(255,255,255,0.03);
+  margin-bottom: 20px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}}
+
+.streamlit-card:hover {{
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(2,6,12,0.8);
+}}
+
+.chart-container {{
+  border-radius: 16px;
+  overflow: hidden;
+  margin-top: 10px;
+}}
+
+.header-container {{
+  background: linear-gradient(90deg, rgba(11,18,32,0.8) 0%, rgba(15,23,36,0.6) 100%);
+  padding: 20px 24px;
+  border-radius: 16px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255,255,255,0.05);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}}
+
+.stSelectbox, .stSlider, .stDateInput, .stTimeInput {{
+  margin-bottom: 16px;
+}}
+
+.stSelectbox > div > div {{
+  background-color: rgba(15, 23, 36, 0.7);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+}}
+
+.stButton > button {{
+  border-radius: 10px;
+  background: linear-gradient(90deg, {ACCENT}, {ACCENT_SECOND});
+  color: #0f1724;
+  font-weight: 600;
+  border: none;
+  transition: all 0.3s ease;
+}}
+
+.stButton > button:hover {{
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(110, 231, 183, 0.3);
 }}
 
 .plotly-graph-div {{ background: transparent !important; }}
+
+/* Custom metric cards */
+.metric-card {{
+  background: linear-gradient(135deg, rgba(11,18,32,0.8), rgba(15,23,36,0.6));
+  border-radius: 12px;
+  padding: 16px;
+  border: 1px solid rgba(255,255,255,0.05);
+  text-align: center;
+  margin: 8px 0;
+}}
+
+.metric-value {{
+  font-size: 24px;
+  font-weight: 700;
+  color: {ACCENT};
+  margin: 8px 0;
+}}
+
+.metric-label {{
+  font-size: 14px;
+  color: {MUTED};
+}}
+
+/* Loading animation */
+@keyframes pulse {{
+  0% {{ opacity: 1; }}
+  50% {{ opacity: 0.5; }}
+  100% {{ opacity: 1; }}
+}}
+
+.pulse {{
+  animation: pulse 1.5s ease-in-out infinite;
+}}
 """
 
 st.markdown(f"<style>{CUSTOM_CSS}</style>", unsafe_allow_html=True)
@@ -64,23 +143,33 @@ st.markdown(f"<style>{CUSTOM_CSS}</style>", unsafe_allow_html=True)
 # -------------------------------
 # Page settings
 # -------------------------------
-st.set_page_config(layout="wide", page_title="Crypto & Gold Supply/Demand Analysis")
+st.set_page_config(layout="wide", page_title="Crypto & Gold Supply/Demand Analysis", page_icon="📊")
 
 # -------------------------------
-# Sidebar
+# Sidebar with improved UI
 # -------------------------------
 with st.sidebar:
-    st.markdown("<div style='margin-bottom:12px;'><h3 style='margin:0'>⚙️ Settings</h3></div>", unsafe_allow_html=True)
-
+    st.markdown("""
+    <div style='margin-bottom:20px; text-align:center;'>
+        <h2 style='margin:0; background:linear-gradient(90deg, #6EE7B7, #60A5FA); -webkit-background-clip:text; -webkit-text-fill-color:transparent;'>📊 Analysis</h2>
+        <p style='margin:4px 0 0 0; color:#98A4B3; font-size:14px;'>Supply/Demand Dashboard</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
     symbols = ["BTC/USD", "ETH/USD", "BNB/USD", "XRP/USD", "ADA/USD", "Gold"]
-    symbol = st.selectbox("Select Symbol", options=symbols, index=1)
+    symbol = st.selectbox("**Select Symbol**", options=symbols, index=1, help="Choose the asset to analyze")
+    
+    timeframe = st.selectbox("**Timeframe**", options=["1m","5m","15m","30m","1h","4h","1d"], index=4, help="Select the chart timeframe")
+    lookback = st.slider("**Lookback Period**", 1, 10, 3, help="Number of periods to look back for Supply/Demand points")
 
-    timeframe = st.selectbox("Timeframe", options=["1m","5m","15m","30m","1h","4h","1d"], index=4)
-    lookback = st.slider("Lookback (for Supply/Demand points)", 1, 10, 3)
-
+    st.markdown("---")
+    
+    st.markdown("**Date Range**")
     default_end = datetime.now().replace(hour=23, minute=59, second=0, microsecond=0)
-    end_date = st.date_input("End Date", value=default_end.date())
-    end_time = st.time_input("End Time", value=default_end.time())
+    end_date = st.date_input("End Date", value=default_end.date(), label_visibility="collapsed")
+    end_time = st.time_input("End Time", value=default_end.time(), label_visibility="collapsed")
 
     required_candles = 500
     tf_map = {
@@ -95,8 +184,29 @@ with st.sidebar:
     delta = tf_map[timeframe] * required_candles
     default_start = datetime.combine(end_date, end_time) - delta
 
-    start_date = st.date_input("Start Date", value=default_start.date())
-    start_time = st.time_input("Start Time", value=default_start.time())
+    start_date = st.date_input("Start Date", value=default_start.date(), label_visibility="collapsed")
+    start_time = st.time_input("Start Time", value=default_start.time(), label_visibility="collapsed")
+    
+    st.markdown("---")
+    
+    # Add some metrics in the sidebar
+    st.markdown("**Data Info**")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-label">Timeframe</div>
+            <div class="metric-value">{timeframe}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-label">Lookback</div>
+            <div class="metric-value">{lookback}</div>
+        </div>
+        """, unsafe_allow_html=True)
 
 # -------------------------------
 # Convert to timestamp
@@ -107,13 +217,23 @@ since = int(start_dt.timestamp() * 1000)
 until = int(end_dt.timestamp() * 1000)
 
 # -------------------------------
+# Main content area
+# -------------------------------
+st.markdown(f"""
+<div class="header-container">
+    <h1 style="margin:0; font-size:32px;">{symbol} Supply/Demand Analysis</h1>
+    <p style="margin:4px 0 0 0; color:#98A4B3; font-size:16px;">
+        Period: {start_dt.strftime('%Y-%m-%d %H:%M')} to {end_dt.strftime('%Y-%m-%d %H:%M')}
+    </p>
+</div>
+""", unsafe_allow_html=True)
+
+# -------------------------------
 # Fetch data
 # -------------------------------
 main_container = st.container()
 
 with main_container:
-    st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
-
     if symbol == "Gold":
         yf_tf_map = {
             "1m": "1m",
@@ -127,7 +247,7 @@ with main_container:
         yf_interval = yf_tf_map[timeframe]
 
         ticker = "GC=F"
-        with st.spinner("Fetching Gold data from Yahoo Finance..."):
+        with st.spinner("🔄 Fetching Gold data from Yahoo Finance..."):
             df = yf.download(
                 ticker,
                 start=start_dt,
@@ -169,7 +289,7 @@ with main_container:
         exchange = ccxt.coinbase()
         ohlcv = []
 
-        with st.spinner("Fetching crypto data from exchange..."):
+        with st.spinner("🔄 Fetching crypto data from exchange..."):
             while since < until:
                 batch = exchange.fetch_ohlcv(symbol, timeframe, since=since, limit=500)
                 if len(batch) == 0:
@@ -209,13 +329,51 @@ with main_container:
     supply_idx_filtered = [i for i in supply_idx if data['Volume'].iloc[i] > data['Volume_MA20'].iloc[i]]
     demand_idx_filtered = [i for i in demand_idx if data['Volume'].iloc[i] > data['Volume_MA20'].iloc[i]]
 
+    # Display some metrics
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-label">Current Price</div>
+            <div class="metric-value">${data['Close'].iloc[-1]:.2f}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        price_change = data['Close'].iloc[-1] - data['Open'].iloc[-1]
+        change_percent = (price_change / data['Open'].iloc[-1]) * 100
+        change_color = ACCENT if price_change >= 0 else ERROR
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-label">24h Change</div>
+            <div class="metric-value" style="color:{change_color};">{change_percent:+.2f}%</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col3:
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-label">Supply Zones</div>
+            <div class="metric-value">{len(supply_idx_filtered)}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col4:
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-label">Demand Zones</div>
+            <div class="metric-value">{len(demand_idx_filtered)}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
     # -------------------------------
-    # Chart (no subplot titles, no blue box)
+    # Enhanced Chart
     # -------------------------------
     fig = make_subplots(
         rows=2, cols=1, shared_xaxes=True,
         vertical_spacing=0.05,
-        row_heights=[0.72,0.28]
+        row_heights=[0.72,0.28],
+        subplot_titles=("Price Action with Supply/Demand Zones", "Volume")
     )
 
     fig.add_trace(go.Candlestick(
@@ -225,10 +383,10 @@ with main_container:
         low=data['Low'],
         close=data['Close'],
         name="Price",
-        increasing_line_color="rgba(60,180,120,0.95)",  # سبز تیره‌تر
-        decreasing_line_color="rgba(200,60,90,0.95)",   # قرمز تیره‌تر
-        increasing_fillcolor="rgba(60,180,120,0.95)",
-        decreasing_fillcolor="rgba(200,60,90,0.95)"
+        increasing_line_color=ACCENT,
+        decreasing_line_color=ERROR,
+        increasing_fillcolor=ACCENT,
+        decreasing_fillcolor=ERROR
     ), row=1, col=1)
 
     data["Candle_Range"] = data["High"] - data["Low"]
@@ -239,16 +397,18 @@ with main_container:
         x=data.index[supply_idx_filtered],
         y=data['High'].iloc[supply_idx_filtered] + offset,
         mode='markers',
-        marker=dict(symbol='triangle-down', color='rgba(251,113,133,0.95)', size=12),
-        name='Supply'
+        marker=dict(symbol='triangle-down', color='rgba(251,113,133,0.95)', size=14, line=dict(width=2, color='white')),
+        name='Supply Zone',
+        hovertemplate='<b>Supply Zone</b><br>Price: %{y:.2f}<br>Time: %{x}<extra></extra>'
     ), row=1, col=1)
 
     fig.add_trace(go.Scatter(
         x=data.index[demand_idx_filtered],
         y=data['Low'].iloc[demand_idx_filtered] - offset,
         mode='markers',
-        marker=dict(symbol='triangle-up', color='rgba(110,231,183,0.95)', size=12),
-        name='Demand'
+        marker=dict(symbol='triangle-up', color='rgba(110,231,183,0.95)', size=14, line=dict(width=2, color='white')),
+        name='Demand Zone',
+        hovertemplate='<b>Demand Zone</b><br>Price: %{y:.2f}<br>Time: %{x}<extra></extra>'
     ), row=1, col=1)
 
     fig.add_trace(go.Bar(
@@ -279,22 +439,50 @@ with main_container:
         template="plotly_dark",
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(family="Inter, Poppins, sans-serif", color=TEXT),
+        font=dict(family="Inter, Poppins, sans-serif", color=TEXT, size=12),
         xaxis_rangeslider_visible=False,
         showlegend=True,
         height=820,
         barmode="overlay",
         hovermode='x unified',
-        legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
-        margin=dict(l=40, r=24, t=40, b=40),
+        legend=dict(
+            orientation='h', 
+            yanchor='bottom', 
+            y=1.02, 
+            xanchor='right', 
+            x=1,
+            bgcolor='rgba(11,18,32,0.7)',
+            bordercolor='rgba(255,255,255,0.1)',
+            borderwidth=1
+        ),
+        margin=dict(l=40, r=24, t=60, b=40),
         transition={'duration': 400, 'easing': 'cubic-in-out'}
     )
 
     fig.update_xaxes(showgrid=False, zeroline=False, showline=True, linewidth=0.6, linecolor="#1f2937")
     fig.update_yaxes(showgrid=True, gridwidth=0.4, gridcolor='rgba(255,255,255,0.03)', zeroline=False, showline=False)
+    
+    # Update subplot titles
+    fig.update_annotations(font_size=16, font_color=ACCENT)
 
     st.markdown("<div class='streamlit-card chart-container'>", unsafe_allow_html=True)
     st.plotly_chart(fig, use_container_width=True)
     st.markdown("</div>", unsafe_allow_html=True)
+
+    # Add some summary information
+    with st.expander("📈 View Data Summary"):
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.metric("Total Candles", len(data))
+            st.metric("Average Volume", f"{data['Volume'].mean():.2f}")
+            
+        with col2:
+            st.metric("Highest Price", f"{data['High'].max():.2f}")
+            st.metric("Lowest Price", f"{data['Low'].min():.2f}")
+            
+        with col3:
+            st.metric("Price Change", f"{(data['Close'].iloc[-1] - data['Open'].iloc[0]):.2f}")
+            st.metric("Change %", f"{((data['Close'].iloc[-1] - data['Open'].iloc[0]) / data['Open'].iloc[0] * 100):.2f}%")
 
 # End of file
