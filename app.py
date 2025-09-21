@@ -225,10 +225,10 @@ with main_container:
         low=data['Low'],
         close=data['Close'],
         name="Price",
-        increasing_line_color=ACCENT,
-        decreasing_line_color=ERROR,
-        increasing_fillcolor=ACCENT,
-        decreasing_fillcolor=ERROR
+        increasing_line_color="rgba(60,180,120,0.95)",  # سبز تیره‌تر
+        decreasing_line_color="rgba(200,60,90,0.95)",   # قرمز تیره‌تر
+        increasing_fillcolor="rgba(60,180,120,0.95)",
+        decreasing_fillcolor="rgba(200,60,90,0.95)"
     ), row=1, col=1)
 
     data["Candle_Range"] = data["High"] - data["Low"]
