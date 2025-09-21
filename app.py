@@ -383,11 +383,12 @@ with main_container:
         low=data['Low'],
         close=data['Close'],
         name="Price",
-        increasing_line_color=ACCENT,
-        decreasing_line_color=ERROR,
-        increasing_fillcolor=ACCENT,
-        decreasing_fillcolor=ERROR
+        increasing_line_color="#26A69A",
+        decreasing_line_color="#EF5350",
+        increasing_fillcolor="#26A69A",
+        decreasing_fillcolor="#EF5350"
     ), row=1, col=1)
+
 
     data["Candle_Range"] = data["High"] - data["Low"]
     avg_range = data["Candle_Range"].mean() if len(data)>0 else 0
