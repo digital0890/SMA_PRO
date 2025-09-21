@@ -158,7 +158,7 @@ with st.sidebar:
     
     st.markdown("---")
     
-    symbols = ["Gold"]
+    symbols = ["Gold","BTC/USD", "ETH/USD", "BNB/USD", "XRP/USD", "ADA/USD"]
     symbol = st.selectbox("**Select Symbol**", options=symbols, index=1, help="Choose the asset to analyze")
     
     timeframe = st.selectbox("**Timeframe**", options=["1m","5m","15m","30m","1h","4h","1d"], index=4, help="Select the chart timeframe")
