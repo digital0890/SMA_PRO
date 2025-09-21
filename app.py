@@ -412,21 +412,24 @@ with main_container:
         hovertemplate='<b>Demand Zone</b><br>Price: %{y:.2f}<br>Time: %{x}<extra></extra>'
     ), row=1, col=1)
 
+    # Up Volume
     fig.add_trace(go.Bar(
         x=up.index,
         y=up['Volume'],
         name="Up Volume",
-        marker_color="rgba(110,231,183,0.9)",
-        opacity=0.9
+        marker_color="#26A69A",
+        opacity=0.8
     ), row=2, col=1)
-
+    
+    # Down Volume
     fig.add_trace(go.Bar(
         x=down.index,
         y=down['Volume'],
         name="Down Volume",
-        marker_color="rgba(251,113,133,0.9)",
-        opacity=0.9
+        marker_color="#EF5350",
+        opacity=0.8
     ), row=2, col=1)
+
 
     fig.add_trace(go.Scatter(
         x=data.index,
