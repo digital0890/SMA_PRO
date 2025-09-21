@@ -16,13 +16,13 @@ from datetime import datetime, timedelta
 # -------------------------------
 FONT_IMPORT = "@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Poppins:wght@400;600&display=swap');"
 
-DARK_BG = "#0f1724"           # deep navy-black
-CARD_BG = "#0b1220"           # slightly lighter card background
-ACCENT = "#6EE7B7"            # mint green accent
-ACCENT_SECOND = "#60A5FA"     # blue accent for secondary highlights
-TEXT = "#E6EEF5"              # soft off-white for main text
-MUTED = "#98A4B3"             # muted text
-ERROR = "#FB7185"             # accessible error
+DARK_BG = "#0f1724"
+CARD_BG = "#0b1220"
+ACCENT = "#6EE7B7"
+ACCENT_SECOND = "#60A5FA"
+TEXT = "#E6EEF5"
+MUTED = "#98A4B3"
+ERROR = "#FB7185"
 
 CUSTOM_CSS = f"""
 {FONT_IMPORT}
@@ -56,40 +56,6 @@ CUSTOM_CSS = f"""
   border: 1px solid rgba(255,255,255,0.03);
 }}
 
-h1, h2, h3, h4 {{ color: var(--text); margin: 0 0 8px 0; }}
-
-.app-title {{
-  font-family: 'Poppins', 'Inter', sans-serif;
-  font-weight: 600;
-  letter-spacing: -0.2px;
-  color: var(--text);
-}}
-
-.stButton>button, button[kind="primary"] {{
-  background: linear-gradient(90deg, var(--accent), var(--accent-2));
-  color: #071226;
-  border-radius: 10px;
-  padding: 8px 14px;
-  border: none;
-  box-shadow: 0 6px 18px rgba(33,150,110,0.12);
-  transition: transform 0.12s ease, box-shadow 0.12s ease;
-}}
-.stButton>button:hover {{ transform: translateY(-2px); box-shadow: 0 10px 30px rgba(33,150,110,0.12); }}
-
-input, select, textarea {{
-  outline-color: rgba(96,165,250,0.35) !important;
-  box-shadow: 0 0 0 3px rgba(96,165,250,0.06) inset !important;
-}}
-
-.kpi {{ display:inline-block; padding:8px 12px; border-radius:10px; background: rgba(255,255,255,0.02); color: var(--text); font-weight:600; }}
-
-@media (max-width: 640px) {{
-  .streamlit-card {{ padding: 12px; border-radius: 10px; }}
-  .chart-container {{ height: 560px !important; }}
-}}
-
-:focus {{ outline: 3px solid rgba(110,231,183,0.18); outline-offset: 2px; }}
-
 .plotly-graph-div {{ background: transparent !important; }}
 """
 
@@ -99,12 +65,6 @@ st.markdown(f"<style>{CUSTOM_CSS}</style>", unsafe_allow_html=True)
 # Page settings
 # -------------------------------
 st.set_page_config(layout="wide", page_title="Crypto & Gold Supply/Demand Analysis")
-
-st.markdown("<div style='text-align:center; margin-bottom:8px;'>"
-            "<h1 class='app-title' style='font-size:28px;'>📈 Crypto & Gold — Supply & Demand Analysis</h1>"
-            "<div style='color:var(--muted); font-size:13px; margin-top:6px;'>Dark modern theme • Smooth UX • Accessible colors</div>"
-            "</div>", unsafe_allow_html=True)
-st.markdown("<hr style='opacity:0.06'/>", unsafe_allow_html=True)
 
 # -------------------------------
 # Sidebar
@@ -137,8 +97,6 @@ with st.sidebar:
 
     start_date = st.date_input("Start Date", value=default_start.date())
     start_time = st.time_input("Start Time", value=default_start.time())
-
-    st.markdown("<div style='margin-top:12px; color:var(--muted); font-size:13px;'>Adjust timeframe & range to fetch 500+ candles for stable indicators.</div>", unsafe_allow_html=True)
 
 # -------------------------------
 # Convert to timestamp
@@ -337,13 +295,5 @@ with main_container:
     st.markdown("<div class='streamlit-card chart-container'>", unsafe_allow_html=True)
     st.plotly_chart(fig, use_container_width=True)
     st.markdown("</div>", unsafe_allow_html=True)
-
-    with st.expander("Design & Accessibility Notes (click to expand)"):
-        st.markdown("- Color palette chosen for high contrast while reducing eye strain on dark backgrounds.")
-        st.markdown("- Focus states and larger tap targets improve keyboard & mobile accessibility.")
-        st.markdown("- Fonts: Inter & Poppins for clarity and modern feel.")
-        st.markdown("- Animations are subtle and do not change app functionality.")
-
-    st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
 
 # End of file
