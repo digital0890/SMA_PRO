@@ -158,7 +158,7 @@ with st.sidebar:
     
     st.markdown("---")
     
-    symbols = ["BTC/USD", "ETH/USD", "XRP/USD", "BNB/USD", "SOL/USD", "DOGE/USD", "TRX/USD", "ADA/USD","-_-_-_-_-_-_-_-_-_-_-_-_-", "Gold"]
+    symbols = ["BTC/USD", "ETH/USD", "BNB/USD", "XRP/USD", "ADA/USD", "Gold"]
     symbol = st.selectbox("**Select Symbol**", options=symbols, index=1, help="Choose the asset to analyze")
     
     timeframe = st.selectbox("**Timeframe**", options=["1m","5m","15m","30m","1h","4h","1d"], index=4, help="Select the chart timeframe")
@@ -383,46 +383,33 @@ with main_container:
         low=data['Low'],
         close=data['Close'],
         name="Price",
-        increasing_line_color="rgba(110,231,183,0.7)",  # تیره‌تر از قبل
-        decreasing_line_color="rgba(251,113,133,0.7)",  # تیره‌تر از قبل
-        increasing_fillcolor="rgba(110,231,183,0.6)",  # تیره‌تر و کمی شفاف
-        decreasing_fillcolor="rgba(251,113,133,0.6)"   # تیره‌تر و کمی شفاف
+        increasing_line_color=ACCENT,
+        decreasing_line_color=ERROR,
+        increasing_fillcolor=ACCENT,
+        decreasing_fillcolor=ERROR
     ), row=1, col=1)
 
     data["Candle_Range"] = data["High"] - data["Low"]
     avg_range = data["Candle_Range"].mean() if len(data)>0 else 0
     offset = avg_range * 0.2
 
-# Supply Zone
-fig.add_trace(go.Scatter(
-    x=data.index[supply_idx_filtered],
-    y=data['High'].iloc[supply_idx_filtered] + offset,
-    mode='markers',
-    marker=dict(
-        symbol='triangle-down',
-        color='rgba(251,113,133,0.95)',
-        size=14,
-        line=dict(width=2, color='rgba(251,113,133,0.95)')  # هم‌رنگ مثلث
-    ),
-    name='Supply Zone',
-    hovertemplate='<b>Supply Zone</b><br>Price: %{y:.2f}<br>Time: %{x}<extra></extra>'
-), row=1, col=1)
+    fig.add_trace(go.Scatter(
+        x=data.index[supply_idx_filtered],
+        y=data['High'].iloc[supply_idx_filtered] + offset,
+        mode='markers',
+        marker=dict(symbol='triangle-down', color='rgba(251,113,133,0.95)', size=14, line=dict(width=2, color='white')),
+        name='Supply Zone',
+        hovertemplate='<b>Supply Zone</b><br>Price: %{y:.2f}<br>Time: %{x}<extra></extra>'
+    ), row=1, col=1)
 
-# Demand Zone
-fig.add_trace(go.Scatter(
-    x=data.index[demand_idx_filtered],
-    y=data['Low'].iloc[demand_idx_filtered] - offset,
-    mode='markers',
-    marker=dict(
-        symbol='triangle-up',
-        color='rgba(110,231,183,0.95)',
-        size=14,
-        line=dict(width=2, color='rgba(110,231,183,0.95)')  # هم‌رنگ مثلث
-    ),
-    name='Demand Zone',
-    hovertemplate='<b>Demand Zone</b><br>Price: %{y:.2f}<br>Time: %{x}<extra></extra>'
-), row=1, col=1)
-
+    fig.add_trace(go.Scatter(
+        x=data.index[demand_idx_filtered],
+        y=data['Low'].iloc[demand_idx_filtered] - offset,
+        mode='markers',
+        marker=dict(symbol='triangle-up', color='rgba(110,231,183,0.95)', size=14, line=dict(width=2, color='white')),
+        name='Demand Zone',
+        hovertemplate='<b>Demand Zone</b><br>Price: %{y:.2f}<br>Time: %{x}<extra></extra>'
+    ), row=1, col=1)
 
     fig.add_trace(go.Bar(
         x=up.index,
