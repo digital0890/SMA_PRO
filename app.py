@@ -162,7 +162,7 @@ with st.sidebar:
     symbol = st.selectbox("**Select Symbol**", options=symbols, index=1, help="Choose the asset to analyze")
     
     timeframe = st.selectbox("**Timeframe**", options=["1m","5m","15m","30m","1h","4h","1d"], index=4, help="Select the chart timeframe")
-    lookback = st.slider("**Lookback Period**", 1, 10, 3, help="Number of periods to look back for Supply/Demand points")
+    lookback = st.slider("**Lookback**", 1, 10, 3, help="Number of periods to look back for Supply/Demand points")
 
     st.markdown("---")
     
