@@ -143,7 +143,7 @@ st.markdown(f"<style>{CUSTOM_CSS}</style>", unsafe_allow_html=True)
 # -------------------------------
 # Page settings
 # -------------------------------
-st.set_page_config(layout="wide", page_title="Crypto & Gold Supply/Demand Analysis", page_icon="📊")
+st.set_page_config(layout="wide", page_title="Crypto & Gold Supply/Demand Analysis")
 
 # -------------------------------
 # Sidebar with improved UI
@@ -221,7 +221,7 @@ until = int(end_dt.timestamp() * 1000)
 # -------------------------------
 st.markdown(f"""
 <div class="header-container">
-    <h1 style="margin:0; font-size:32px;">{symbol} Supply/Demand Analysis</h1>
+    <h1 style="margin:0; font-size:32px;">{symbol}</h1>
     <p style="margin:4px 0 0 0; color:#98A4B3; font-size:16px;">
         Period: {start_dt.strftime('%Y-%m-%d %H:%M')} to {end_dt.strftime('%Y-%m-%d %H:%M')}
     </p>
