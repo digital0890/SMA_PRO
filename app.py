@@ -8,12 +8,12 @@ import time
 from datetime import datetime, timedelta
 
 # --------------------------------------------------
-# Professional and Aligned Dark Theme Streamlit App
+# Dark Modern Themed Streamlit App (Clean & Uniform)
 # --------------------------------------------------
 # -------------------------------
-# Styling & Theme (Aligned and Organized)
+# Styling & Theme (Professional Dark)
 # -------------------------------
-FONT_IMPORT = "@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700&display=swap');"
+FONT_IMPORT = "@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@400;500;600&display=swap');"
 DARK_BG = "#0d1321"
 CARD_BG = "#151b2d"
 ACCENT = "#2dd4bf"
@@ -33,50 +33,49 @@ CUSTOM_CSS = f"""
   --error: {ERROR};
   --border: rgba(255,255,255,0.1);
   --shadow: rgba(0,0,0,0.3);
-  --spacing-unit: 1rem;
+  --base-font-size: 1rem;
   --border-radius: 12px;
+  --padding-unit: 1rem;
 }}
 [data-testid='stAppViewContainer'] {{
   background: linear-gradient(180deg, #0d1321 0%, #1f2937 100%);
   color: var(--text);
   font-family: 'Inter', 'Poppins', system-ui, sans-serif;
-  padding: calc(var(--spacing-unit) * 2);
+  font-size: var(--base-font-size);
+  padding: calc(var(--padding-unit) * 2);
   min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-unit);
+  overflow-x: hidden;
 }}
 [data-testid='stSidebar'] {{
   background: linear-gradient(180deg, #151b2d 0%, #1e293b 100%);
   border-right: 1px solid var(--border);
-  padding: calc(var(--spacing-unit) * 1.5);
+  padding: calc(var(--padding-unit) * 1.5);
   box-shadow: 0 4px 16px var(--shadow);
   width: 280px;
   border-radius: var(--border-radius);
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-unit);
 }}
 .streamlit-card {{
   background: var(--card);
   border-radius: var(--border-radius);
-  padding: calc(var(--spacing-unit) * 1.5);
+  padding: calc(var(--padding-unit) * 1.5);
   box-shadow: 0 6px 20px var(--shadow);
   border: 1px solid var(--border);
   transition: transform 0.3s ease, box-shadow 0.3s ease;
+  margin-bottom: calc(var(--padding-unit) * 1);
 }}
 .streamlit-card:hover {{
   transform: translateY(-3px);
-  box-shadow: 0 10px 28px var(--shadow);
+  box-shadow: 0 10px 24px var(--shadow);
 }}
 .stSelectbox, .stSlider, .stDateInput, .stTimeInput {{
   background: rgba(255,255,255,0.08);
   border: 1px solid var(--border);
   border-radius: var(--border-radius);
-  padding: calc(var(--spacing-unit) * 0.75);
-  margin-bottom: var(--spacing-unit);
+  padding: calc(var(--padding-unit) * 0.75);
+  height: 44px;
+  display: flex;
+  align-items: center;
   transition: all 0.3s ease;
-  font-size: 0.95rem;
 }}
 .stSelectbox:hover, .stSlider:hover, .stDateInput:hover, .stTimeInput:hover {{
   background: rgba(255,255,255,0.12);
@@ -89,12 +88,13 @@ CUSTOM_CSS = f"""
   background: transparent;
   border: none;
   outline: none;
-  font-size: 0.95rem;
+  font-size: var(--base-font-size);
+  height: 100%;
   width: 100%;
 }}
 .stSlider > div > div > div > div {{
   background: var(--accent);
-  border-radius: var(--border-radius);
+  border-radius: calc(var(--border-radius) / 2);
 }}
 .plotly-graph-div {{
   background: transparent !important;
@@ -106,25 +106,24 @@ CUSTOM_CSS = f"""
 h3 {{
   font-family: 'Poppins', sans-serif;
   font-weight: 600;
-  font-size: 1.5rem;
+  font-size: calc(var(--base-font-size) * 1.5);
   color: var(--text);
-  margin: 0 0 var(--spacing-unit);
+  margin-bottom: calc(var(--padding-unit) * 1);
   letter-spacing: -0.02em;
   border-bottom: 1px solid var(--border);
-  padding-bottom: calc(var(--spacing-unit) * 0.5);
+  padding-bottom: calc(var(--padding-unit) * 0.5);
 }}
 button, .stButton > button {{
   background: var(--accent-2);
   color: var(--text);
   border: none;
   border-radius: var(--border-radius);
-  padding: calc(var(--spacing-unit) * 0.75) calc(var(--spacing-unit) * 1.5);
+  padding: calc(var(--padding-unit) * 0.75) calc(var(--padding-unit) * 1.5);
   font-family: 'Inter', sans-serif;
   font-weight: 500;
-  font-size: 0.95rem;
+  font-size: var(--base-font-size);
   transition: all 0.3s ease;
-  width: 100%;
-  text-align: center;
+  height: 44px;
 }}
 button:hover, .stButton > button:hover {{
   background: #4338ca;
@@ -132,41 +131,45 @@ button:hover, .stButton > button:hover {{
   box-shadow: 0 4px 12px var(--shadow);
 }}
 .chart-container {{
-  margin-top: calc(var(--spacing-unit) * 2);
+  margin-top: calc(var(--padding-unit) * 1.5);
   animation: slideIn 0.5s ease-in-out;
 }}
 @keyframes slideIn {{
-  from {{ opacity: 0; transform: translateY(10px); }}
+  from {{ opacity: 0; transform: translateY(12px); }}
   to {{ opacity: 1; transform: translateY(0); }}
 }}
 .stSpinner > div {{
   color: var(--accent);
   font-family: 'Inter', sans-serif;
-  font-size: 0.95rem;
+  font-size: var(--base-font-size);
 }}
 @media (max-width: 768px) {{
   [data-testid='stAppViewContainer'] {{
-    padding: var(--spacing-unit);
+    padding: var(--padding-unit);
   }}
   [data-testid='stSidebar'] {{
     width: 100%;
-    padding: var(--spacing-unit);
+    padding: var(--padding-unit);
     border-radius: 0;
   }}
   .streamlit-card {{
-    padding: var(--spacing-unit);
+    padding: var(--padding-unit);
+    margin-bottom: var(--padding-unit);
   }}
   h3 {{
-    font-size: 1.3rem;
+    font-size: calc(var(--base-font-size) * 1.3);
+  }}
+  .stSelectbox, .stSlider, .stDateInput, .stTimeInput, button, .stButton > button {{
+    height: 40px;
   }}
 }}
 @media (max-width: 480px) {{
   .streamlit-card {{
-    padding: calc(var(--spacing-unit) * 0.75);
+    padding: calc(var(--padding-unit) * 0.75);
   }}
   button, .stButton > button {{
-    padding: calc(var(--spacing-unit) * 0.6) var(--spacing-unit);
-    font-size: 0.9rem;
+    padding: calc(var(--padding-unit) * 0.6) calc(var(--padding-unit) * 1);
+    font-size: calc(var(--base-font-size) * 0.9);
   }}
 }}
 """
