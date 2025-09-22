@@ -1,3 +1,5 @@
+**اندیکاتور stochhastic را اضافه کن**
+
 import streamlit as st
 import ccxt
 import pandas as pd
@@ -6,6 +8,7 @@ import plotly.graph_objs as go
 from plotly.subplots import make_subplots
 import time
 from datetime import datetime, timedelta
+import numpy as np
 
 # --------------------------------------------------
 # Dark Modern Themed Streamlit App - Enhanced UI
@@ -146,6 +149,23 @@ st.markdown(f"<style>{CUSTOM_CSS}</style>", unsafe_allow_html=True)
 st.set_page_config(layout="wide", page_title="Crypto & Gold Supply/Demand Analysis", page_icon="📊")
 
 # -------------------------------
+# Stochastic Oscillator Function
+# -------------------------------
+def calculate_stochastic(data, k_period=14, d_period=3):
+    """
+    Calculate Stochastic Oscillator
+    %K = (Current Close - Lowest Low) / (Highest High - Lowest Low) * 100
+    %D = 3-day SMA of %K
+    """
+    low_min = data['Low'].rolling(window=k_period).min()
+    high_max = data['High'].rolling(window=k_period).max()
+    
+    data['stoch_k'] = ((data['Close'] - low_min) / (high_max - low_min)) * 100
+    data['stoch_d'] = data['stoch_k'].rolling(window=d_period).mean()
+    
+    return data
+
+# -------------------------------
 # Sidebar with improved UI
 # -------------------------------
 with st.sidebar:
@@ -164,6 +184,16 @@ with st.sidebar:
     timeframe = st.selectbox("**Timeframe**", options=["1m","5m","15m","30m","1h","4h","1d"], index=4, help="Select the chart timeframe")
     lookback = st.slider("**Lookback**", 1, 10, 10, help="Number of periods to look back for Supply/Demand points")
 
+    st.markdown("---")
+    
+    # Stochastic parameters
+    st.markdown("**Stochastic Parameters**")
+    col1, col2 = st.columns(2)
+    with col1:
+        k_period = st.slider("**%K Period**", 5, 21, 14, help="Period for %K line")
+    with col2:
+        d_period = st.slider("**%D Period**", 2, 7, 3, help="Period for %D line (SMA of %K)")
+    
     st.markdown("---")
     
     st.markdown("**Date Range**")
@@ -312,6 +342,10 @@ with main_container:
     # Calculations
     # -------------------------------
     data["Volume_MA20"] = data["Volume"].rolling(window=20).mean()
+    
+    # Calculate Stochastic Oscillator
+    data = calculate_stochastic(data, k_period, d_period)
+    
     up = data[data["Close"] >= data["Open"]]
     down = data[data["Close"] < data["Open"]]
 
@@ -351,30 +385,36 @@ with main_container:
         """, unsafe_allow_html=True)
     
     with col3:
+        # Current Stochastic values
+        current_k = data['stoch_k'].iloc[-1] if not pd.isna(data['stoch_k'].iloc[-1]) else 0
+        current_d = data['stoch_d'].iloc[-1] if not pd.isna(data['stoch_d'].iloc[-1]) else 0
+        stoch_color = ERROR if current_k > 80 else (ACCENT if current_k < 20 else MUTED)
         st.markdown(f"""
         <div class="metric-card">
-            <div class="metric-label">Supply Zones</div>
-            <div class="metric-value">{len(supply_idx_filtered)}</div>
+            <div class="metric-label">Stochastic %K</div>
+            <div class="metric-value" style="color:{stoch_color};">{current_k:.1f}</div>
         </div>
         """, unsafe_allow_html=True)
     
     with col4:
         st.markdown(f"""
         <div class="metric-card">
-            <div class="metric-label">Demand Zones</div>
-            <div class="metric-value">{len(demand_idx_filtered)}</div>
+            <div class="metric-label">Stochastic %D</div>
+            <div class="metric-value" style="color:{stoch_color};">{current_d:.1f}</div>
         </div>
         """, unsafe_allow_html=True)
 
     # -------------------------------
-    # Enhanced Chart
+    # Enhanced Chart with Stochastic
     # -------------------------------
     fig = make_subplots(
-        rows=2, cols=1, shared_xaxes=True,
+        rows=3, cols=1, shared_xaxes=True,
         vertical_spacing=0.05,
-        row_heights=[0.72,0.28],
+        row_heights=[0.60, 0.20, 0.20],
+        subplot_titles=('Price Chart with Supply/Demand Zones', 'Volume', 'Stochastic Oscillator')
     )
 
+    # Price chart (row 1)
     fig.add_trace(go.Candlestick(
         x=data.index,
         open=data['Open'],
@@ -387,7 +427,6 @@ with main_container:
         increasing_fillcolor="#26A69A",
         decreasing_fillcolor="#EF5350"
     ), row=1, col=1)
-
 
     data["Candle_Range"] = data["High"] - data["Low"]
     avg_range = data["Candle_Range"].mean() if len(data)>0 else 0
@@ -411,7 +450,7 @@ with main_container:
         hovertemplate='<b>Demand Zone</b><br>Price: %{y:.2f}<br>Time: %{x}<extra></extra>'
     ), row=1, col=1)
 
-    # Up Volume
+    # Volume chart (row 2)
     fig.add_trace(go.Bar(
         x=up.index,
         y=up['Volume'],
@@ -420,7 +459,6 @@ with main_container:
         opacity=0.8
     ), row=2, col=1)
     
-    # Down Volume
     fig.add_trace(go.Bar(
         x=down.index,
         y=down['Volume'],
@@ -428,7 +466,6 @@ with main_container:
         marker_color="#EF5350",
         opacity=0.8
     ), row=2, col=1)
-
 
     fig.add_trace(go.Scatter(
         x=data.index,
@@ -438,6 +475,29 @@ with main_container:
         line=dict(color="rgba(96,165,250,0.95)", width=2, dash='dash')
     ), row=2, col=1)
 
+    # Stochastic chart (row 3)
+    fig.add_trace(go.Scatter(
+        x=data.index,
+        y=data['stoch_k'],
+        mode="lines",
+        name="%K",
+        line=dict(color=ACCENT, width=2),
+        hovertemplate='%K: %{y:.2f}<extra></extra>'
+    ), row=3, col=1)
+
+    fig.add_trace(go.Scatter(
+        x=data.index,
+        y=data['stoch_d'],
+        mode="lines",
+        name="%D",
+        line=dict(color=ACCENT_SECOND, width=2),
+        hovertemplate='%D: %{y:.2f}<extra></extra>'
+    ), row=3, col=1)
+
+    # Add overbought/oversold lines
+    fig.add_hline(y=80, line_dash="dash", line_color=ERROR, opacity=0.7, row=3, col=1, annotation_text="Overbought")
+    fig.add_hline(y=20, line_dash="dash", line_color=ACCENT, opacity=0.7, row=3, col=1, annotation_text="Oversold")
+
     fig.update_layout(
         template="plotly_dark",
         paper_bgcolor="rgba(0,0,0,0)",
@@ -445,7 +505,7 @@ with main_container:
         font=dict(family="Inter, Poppins, sans-serif", color=TEXT, size=12),
         xaxis_rangeslider_visible=False,
         showlegend=True,
-        height=820,
+        height=900,
         barmode="overlay",
         hovermode='x unified',
         legend=dict(
@@ -487,5 +547,36 @@ with main_container:
         with col3:
             st.metric("Price Change", f"{(data['Close'].iloc[-1] - data['Open'].iloc[0]):.2f}")
             st.metric("Change %", f"{((data['Close'].iloc[-1] - data['Open'].iloc[0]) / data['Open'].iloc[0] * 100):.2f}%")
+        
+        # Stochastic summary
+        st.markdown("---")
+        st.subheader("Stochastic Oscillator Summary")
+        col4, col5, col6 = st.columns(3)
+        
+        with col4:
+            current_k = data['stoch_k'].iloc[-1] if not pd.isna(data['stoch_k'].iloc[-1]) else 0
+            current_d = data['stoch_d'].iloc[-1] if not pd.isna(data['stoch_d'].iloc[-1]) else 0
+            st.metric("Current %K", f"{current_k:.2f}")
+            st.metric("Current %D", f"{current_d:.2f}")
+            
+        with col5:
+            stoch_signal = "Overbought" if current_k > 80 else ("Oversold" if current_k < 20 else "Neutral")
+            stoch_color = ERROR if current_k > 80 else (ACCENT if current_k < 20 else MUTED)
+            st.markdown(f"**Signal:** <span style='color:{stoch_color}'>{stoch_signal}</span>", unsafe_allow_html=True)
+            
+            # Cross signal
+            if not pd.isna(data['stoch_k'].iloc[-1]) and not pd.isna(data['stoch_k'].iloc[-2]):
+                if data['stoch_k'].iloc[-1] > data['stoch_d'].iloc[-1] and data['stoch_k'].iloc[-2] <= data['stoch_d'].iloc[-2]:
+                    st.markdown("**Cross:** <span style='color:#6EE7B7'>Bullish (K above D)</span>", unsafe_allow_html=True)
+                elif data['stoch_k'].iloc[-1] < data['stoch_d'].iloc[-1] and data['stoch_k'].iloc[-2] >= data['stoch_d'].iloc[-2]:
+                    st.markdown("**Cross:** <span style='color:#FB7185'>Bearish (K below D)</span>", unsafe_allow_html=True)
+                else:
+                    st.markdown("**Cross:** No significant cross")
+                    
+        with col6:
+            st.markdown("**Stochastic Ranges:**")
+            st.markdown("- **Oversold:** < 20")
+            st.markdown("- **Neutral:** 20-80")
+            st.markdown("- **Overbought:** > 80")
 
 # End of file
