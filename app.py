@@ -8,13 +8,10 @@ import time
 from datetime import datetime, timedelta
 import numpy as np
 import sqlite3
-import asyncio
-import websockets
 import json
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.ensemble import RandomForestClassifier
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, Dense, Dropout
+from sklearn.linear_model import LinearRegression
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -303,91 +300,95 @@ class AdvancedIndicators:
         return data
 
 # -------------------------------
-# AI Prediction Models
+# AI Prediction Models (Without TensorFlow)
 # -------------------------------
 class AIPredictor:
     def __init__(self):
         self.scaler = MinMaxScaler()
         
-    def create_lstm_model(self, input_shape):
-        model = Sequential([
-            LSTM(50, return_sequences=True, input_shape=input_shape),
-            Dropout(0.2),
-            LSTM(50, return_sequences=True),
-            Dropout(0.2),
-            LSTM(50),
-            Dropout(0.2),
-            Dense(25),
-            Dense(1)
-        ])
-        model.compile(optimizer='adam', loss='mean_squared_error')
-        return model
-    
-    def predict_price_lstm(self, data, future_periods=10):
+    def predict_price_linear(self, data, future_periods=10):
         try:
             # Prepare data
             prices = data['Close'].values.reshape(-1, 1)
-            scaled_prices = self.scaler.fit_transform(prices)
             
-            # Create sequences
-            sequence_length = 60
-            X, y = [], []
+            # Create features (time index)
+            X = np.arange(len(prices)).reshape(-1, 1)
+            y = prices
             
-            for i in range(sequence_length, len(scaled_prices)):
-                X.append(scaled_prices[i-sequence_length:i, 0])
-                y.append(scaled_prices[i, 0])
-            
-            X, y = np.array(X), np.array(y)
-            X = X.reshape(X.shape[0], X.shape[1], 1)
-            
-            # Train model
-            model = self.create_lstm_model((X.shape[1], 1))
-            model.fit(X, y, epochs=10, batch_size=32, verbose=0)
+            # Train linear regression model
+            model = LinearRegression()
+            model.fit(X, y)
             
             # Predict future
-            last_sequence = scaled_prices[-sequence_length:]
-            predictions = []
+            future_X = np.arange(len(prices), len(prices) + future_periods).reshape(-1, 1)
+            predictions = model.predict(future_X)
             
-            for _ in range(future_periods):
-                pred = model.predict(last_sequence.reshape(1, sequence_length, 1), verbose=0)
-                predictions.append(pred[0, 0])
-                last_sequence = np.append(last_sequence[1:], pred[0])
-            
-            predictions = self.scaler.inverse_transform(np.array(predictions).reshape(-1, 1))
             return predictions.flatten()
             
         except Exception as e:
             st.error(f"Prediction error: {e}")
             return np.array([data['Close'].iloc[-1]] * future_periods)
     
+    def predict_price_arima(self, data, future_periods=10):
+        try:
+            # Simple moving average based prediction
+            prices = data['Close'].values
+            last_ma = np.mean(prices[-10:])  # 10-period moving average
+            trend = (prices[-1] - prices[-10]) / prices[-10]  # 10-period trend
+            
+            predictions = []
+            current_price = prices[-1]
+            
+            for i in range(future_periods):
+                # Simple trend continuation with mean reversion
+                next_price = current_price * (1 + trend * 0.5)  # Reduce trend impact
+                predictions.append(next_price)
+                current_price = next_price
+            
+            return np.array(predictions)
+            
+        except Exception as e:
+            st.error(f"ARIMA prediction error: {e}")
+            return np.array([data['Close'].iloc[-1]] * future_periods)
+    
     def detect_trend_ml(self, data):
-        # Create features
-        data['returns'] = data['Close'].pct_change()
-        data['volatility'] = data['returns'].rolling(20).std()
-        data['momentum'] = data['Close'] - data['Close'].shift(5)
-        
-        # Target variable (1 for uptrend, 0 for downtrend)
-        data['trend'] = (data['Close'].shift(-5) > data['Close']).astype(int)
-        
-        # Prepare data for ML
-        features = ['returns', 'volatility', 'momentum']
-        data_clean = data.dropna()
-        
-        if len(data_clean) < 50:
-            return "Insufficient data"
-        
-        X = data_clean[features]
-        y = data_clean['trend']
-        
-        # Train model
-        model = RandomForestClassifier(n_estimators=100, random_state=42)
-        model.fit(X[:-5], y[:-5])  # Leave last 5 for prediction
-        
-        # Predict current trend
-        current_features = X.iloc[-1:].values
-        prediction = model.predict(current_features)[0]
-        
-        return "Uptrend" if prediction == 1 else "Downtrend"
+        try:
+            # Create features
+            data['returns'] = data['Close'].pct_change()
+            data['volatility'] = data['returns'].rolling(20).std()
+            data['momentum'] = data['Close'] - data['Close'].shift(5)
+            data['volume_trend'] = data['Volume'] / data['Volume'].rolling(20).mean()
+            
+            # Target variable (1 for uptrend, 0 for downtrend)
+            data['trend'] = (data['Close'].shift(-5) > data['Close']).astype(int)
+            
+            # Prepare data for ML
+            features = ['returns', 'volatility', 'momentum', 'volume_trend']
+            data_clean = data.dropna()
+            
+            if len(data_clean) < 50:
+                return "Insufficient data"
+            
+            X = data_clean[features]
+            y = data_clean['trend']
+            
+            # Train model
+            model = RandomForestClassifier(n_estimators=50, random_state=42)
+            model.fit(X[:-5], y[:-5])  # Leave last 5 for prediction
+            
+            # Predict current trend
+            if len(X) > 0:
+                current_features = X.iloc[-1:].values
+                prediction = model.predict(current_features)[0]
+                probability = model.predict_proba(current_features)[0][1]
+                
+                confidence = "High" if probability > 0.7 else "Medium" if probability > 0.6 else "Low"
+                return f"{'Uptrend' if prediction == 1 else 'Downtrend'} ({confidence} confidence)"
+            else:
+                return "Insufficient data"
+                
+        except Exception as e:
+            return f"Analysis error: {str(e)[:50]}"
 
 # -------------------------------
 # Alert System
@@ -423,9 +424,13 @@ class AlertSystem:
                 condition_met = True
             elif condition == "price_below" and current_price < value:
                 condition_met = True
-            elif condition == "rsi_oversold" and data.get('rsi', [70])[-1] < 30:
+            elif condition == "rsi_oversold" and 'rsi' in data and data['rsi'].iloc[-1] < 30:
                 condition_met = True
-            elif condition == "rsi_overbought" and data.get('rsi', [30])[-1] > 70:
+            elif condition == "rsi_overbought" and 'rsi' in data and data['rsi'].iloc[-1] > 70:
+                condition_met = True
+            elif condition == "stoch_oversold" and 'stoch_k' in data and data['stoch_k'].iloc[-1] < 20:
+                condition_met = True
+            elif condition == "stoch_overbought" and 'stoch_k' in data and data['stoch_k'].iloc[-1] > 80:
                 condition_met = True
             
             if condition_met:
@@ -483,31 +488,6 @@ class PortfolioManager:
         return total_value, total_pnl
 
 # -------------------------------
-# Real-time Data Streaming
-# -------------------------------
-class RealTimeData:
-    def __init__(self):
-        self.latest_data = {}
-    
-    async def binance_websocket(self, symbol):
-        uri = f"wss://stream.binance.com:9443/ws/{symbol.lower()}@kline_1m"
-        
-        async with websockets.connect(uri) as websocket:
-            while True:
-                message = await websocket.recv()
-                data = json.loads(message)
-                kline = data['k']
-                
-                self.latest_data[symbol] = {
-                    'timestamp': datetime.fromtimestamp(kline['t'] / 1000),
-                    'open': float(kline['o']),
-                    'high': float(kline['h']),
-                    'low': float(kline['l']),
-                    'close': float(kline['c']),
-                    'volume': float(kline['v'])
-                }
-
-# -------------------------------
 # Multi-timeframe Analysis
 # -------------------------------
 def multi_timeframe_analysis(data, symbol):
@@ -563,7 +543,6 @@ st.set_page_config(layout="wide", page_title="Advanced Crypto & Gold Analysis", 
 alert_system = AlertSystem()
 portfolio_manager = PortfolioManager()
 ai_predictor = AIPredictor()
-realtime_data = RealTimeData()
 indicators = AdvancedIndicators()
 
 # -------------------------------
@@ -621,11 +600,10 @@ with st.sidebar:
     
     enable_ai = st.checkbox("Enable AI Predictions", value=True)
     enable_alerts = st.checkbox("Enable Alert System", value=True)
-    enable_realtime = st.checkbox("Enable Real-time Data", value=False)
     
     if enable_alerts:
         with st.expander("Set Alert"):
-            alert_condition = st.selectbox("Condition", ["price_above", "price_below", "rsi_oversold", "rsi_overbought"])
+            alert_condition = st.selectbox("Condition", ["price_above", "price_below", "rsi_oversold", "rsi_overbought", "stoch_oversold", "stoch_overbought"])
             alert_value = st.number_input("Value", value=1000.0)
             if st.button("Add Alert"):
                 alert_system.add_alert(symbol, alert_condition, alert_value)
@@ -639,7 +617,7 @@ with st.sidebar:
     with st.expander("Add Position"):
         col1, col2 = st.columns(2)
         with col1:
-            pos_symbol = st.selectbox("Symbol", ["BTC", "ETH", "SOL", "ADA"])
+            pos_symbol = st.selectbox("Symbol", ["BTC", "ETH", "SOL", "ADA", "Gold"])
             pos_quantity = st.number_input("Quantity", value=1.0)
         with col2:
             pos_price = st.number_input("Entry Price", value=1000.0)
@@ -779,18 +757,23 @@ with main_container:
     
     # Calculate all indicators
     data = indicators.calculate_stochastic(data, k_period, d_period)
-    data = indicators.calculate_ichimoku(data)
     data = indicators.calculate_rsi(data, rsi_period)
     data = indicators.calculate_macd(data, macd_fast, macd_slow, macd_signal)
     data = indicators.calculate_bollinger_bands(data)
+    
+    # Try Ichimoku (might fail if not enough data)
+    try:
+        data = indicators.calculate_ichimoku(data)
+    except Exception:
+        st.warning("Not enough data for Ichimoku Cloud")
     
     # Fibonacci levels
     fib_levels = indicators.calculate_fibonacci_retracement(data)
     
     # AI Predictions
-    if enable_ai and len(data) > 100:
+    if enable_ai and len(data) > 50:
         with st.spinner("🤖 AI is analyzing market trends..."):
-            future_predictions = ai_predictor.predict_price_lstm(data)
+            future_predictions = ai_predictor.predict_price_arima(data)
             ml_trend = ai_predictor.detect_trend_ml(data)
     
     # Multi-timeframe analysis
@@ -846,7 +829,7 @@ with main_container:
         """, unsafe_allow_html=True)
     
     with col3:
-        current_rsi = data['rsi'].iloc[-1] if not pd.isna(data['rsi'].iloc[-1]) else 50
+        current_rsi = data['rsi'].iloc[-1] if 'rsi' in data and not pd.isna(data['rsi'].iloc[-1]) else 50
         rsi_color = ERROR if current_rsi > 70 else (ACCENT if current_rsi < 30 else MUTED)
         st.markdown(f"""
         <div class="metric-card">
@@ -856,7 +839,7 @@ with main_container:
         """, unsafe_allow_html=True)
     
     with col4:
-        current_k = data['stoch_k'].iloc[-1] if not pd.isna(data['stoch_k'].iloc[-1]) else 50
+        current_k = data['stoch_k'].iloc[-1] if 'stoch_k' in data and not pd.isna(data['stoch_k'].iloc[-1]) else 50
         stoch_color = ERROR if current_k > 80 else (ACCENT if current_k < 20 else MUTED)
         st.markdown(f"""
         <div class="metric-card">
@@ -867,11 +850,11 @@ with main_container:
     
     with col5:
         if enable_ai:
-            trend_color = ACCENT if ml_trend == "Uptrend" else ERROR
+            trend_color = ACCENT if "Uptrend" in str(ml_trend) else ERROR if "Downtrend" in str(ml_trend) else MUTED
             st.markdown(f"""
             <div class="metric-card">
                 <div class="metric-label">AI Trend</div>
-                <div class="metric-value" style="color:{trend_color};">{ml_trend}</div>
+                <div class="metric-value" style="color:{trend_color}; font-size: 18px;">{ml_trend}</div>
             </div>
             """, unsafe_allow_html=True)
 
@@ -900,7 +883,7 @@ with main_container:
         )
     )
 
-    # Price chart (row 1) - Candlesticks + Ichimoku + Bollinger Bands
+    # Price chart (row 1) - Candlesticks + Bollinger Bands
     fig.add_trace(go.Candlestick(
         x=data.index,
         open=data['Open'],
@@ -911,20 +894,6 @@ with main_container:
         increasing_line_color="#26A69A",
         decreasing_line_color="#EF5350"
     ), row=1, col=1)
-
-    # Ichimoku Cloud
-    if 'senkou_span_a' in data and 'senkou_span_b' in data:
-        fig.add_trace(go.Scatter(
-            x=data.index, y=data['senkou_span_a'], 
-            line=dict(color='rgba(0,0,0,0)'), showlegend=False
-        ), row=1, col=1)
-        
-        fig.add_trace(go.Scatter(
-            x=data.index, y=data['senkou_span_b'],
-            line=dict(color='rgba(0,0,0,0)'),
-            fill='tonexty', fillcolor='rgba(100,100,100,0.2)',
-            name='Ichimoku Cloud'
-        ), row=1, col=1)
 
     # Bollinger Bands
     if 'bb_upper' in data:
@@ -1019,7 +988,7 @@ with main_container:
             
             with col1:
                 st.subheader("🤖 Price Prediction")
-                if len(data) > 100:
+                if len(data) > 50:
                     future_dates = [data.index[-1] + timedelta(hours=i) for i in range(1, 11)]
                     prediction_df = pd.DataFrame({
                         'Date': future_dates,
@@ -1118,17 +1087,17 @@ with main_container:
             st.metric("Total Change", f"{total_change:.2f}%")
             st.metric("Sharpe Ratio", f"{(data['Close'].pct_change().mean() / data['Close'].pct_change().std()):.2f}")
         
-        # Correlation matrix (if multiple symbols)
+        # Technical Signals
         st.subheader("Technical Signals")
         
         signals = []
-        if current_rsi < 30:
+        if 'rsi' in data and current_rsi < 30:
             signals.append(("RSI Oversold", "Bullish", ACCENT))
-        if current_rsi > 70:
+        if 'rsi' in data and current_rsi > 70:
             signals.append(("RSI Overbought", "Bearish", ERROR))
-        if current_k < 20:
+        if 'stoch_k' in data and current_k < 20:
             signals.append(("Stochastic Oversold", "Bullish", ACCENT))
-        if current_k > 80:
+        if 'stoch_k' in data and current_k > 80:
             signals.append(("Stochastic Overbought", "Bearish", ERROR))
         if 'macd' in data and data['macd'].iloc[-1] > data['macd_signal'].iloc[-1]:
             signals.append(("MACD Bullish", "Bullish", ACCENT))
@@ -1136,23 +1105,6 @@ with main_container:
         for signal, trend, color in signals:
             st.markdown(f"<div style='background:{color}20; padding:10px; border-radius:5px; margin:5px;'>"
                        f"<strong>{signal}</strong> - {trend}</div>", unsafe_allow_html=True)
-
-# -------------------------------
-# Real-time data section
-# -------------------------------
-if enable_realtime:
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("Real-time Data")
-    
-    if st.sidebar.button("Start Real-time Feed"):
-        # This would need to be run in a separate thread for production
-        st.info("Real-time data streaming would be implemented here")
-        
-        # Example of real-time data display
-        if symbol in realtime_data.latest_data:
-            latest = realtime_data.latest_data[symbol]
-            st.sidebar.metric("Live Price", f"${latest['close']:.2f}")
-            st.sidebar.metric("Change", f"{(latest['close'] - latest['open'])/latest['open']*100:.2f}%")
 
 # -------------------------------
 # Footer
