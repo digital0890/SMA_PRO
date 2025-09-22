@@ -8,11 +8,27 @@ import time
 from datetime import datetime, timedelta
 import numpy as np
 import requests
-import ta
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.preprocessing import StandardScaler
+import subprocess
+import sys
 import warnings
 warnings.filterwarnings('ignore')
+
+# Try to import ta library, install if not available
+try:
+    import ta
+except ImportError:
+    st.warning("📦 Installing required technical analysis library...")
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "ta"])
+    import ta
+
+try:
+    from sklearn.ensemble import RandomForestRegressor
+    from sklearn.preprocessing import StandardScaler
+except ImportError:
+    st.warning("📦 Installing required machine learning libraries...")
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "scikit-learn"])
+    from sklearn.ensemble import RandomForestRegressor
+    from sklearn.preprocessing import StandardScaler
 
 # --------------------------------------------------
 # کامل‌ترین نسخه Dashboard تحلیل تکنیکال
@@ -197,41 +213,80 @@ st.markdown(f"<style>{CUSTOM_CSS}</style>", unsafe_allow_html=True)
 # توابع پیشرفته
 # -------------------------------
 
+def calculate_rsi(data, window=14):
+    """محاسبه RSI دستی"""
+    delta = data['Close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=window).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=window).mean()
+    rs = gain / loss
+    rsi = 100 - (100 / (1 + rs))
+    return rsi
+
+def calculate_macd(data, fast=12, slow=26, signal=9):
+    """محاسبه MACD دستی"""
+    ema_fast = data['Close'].ewm(span=fast).mean()
+    ema_slow = data['Close'].ewm(span=slow).mean()
+    macd = ema_fast - ema_slow
+    macd_signal = macd.ewm(span=signal).mean()
+    macd_histogram = macd - macd_signal
+    return macd, macd_signal, macd_histogram
+
+def calculate_bollinger_bands(data, window=20, num_std=2):
+    """محاسبه Bollinger Bands دستی"""
+    sma = data['Close'].rolling(window=window).mean()
+    std = data['Close'].rolling(window=window).std()
+    upper_band = sma + (std * num_std)
+    lower_band = sma - (std * num_std)
+    return upper_band, lower_band, sma
+
+def calculate_stochastic(data, k_window=14, d_window=3):
+    """محاسبه Stochastic دستی"""
+    low_min = data['Low'].rolling(window=k_window).min()
+    high_max = data['High'].rolling(window=k_window).max()
+    stoch_k = ((data['Close'] - low_min) / (high_max - low_min)) * 100
+    stoch_d = stoch_k.rolling(window=d_window).mean()
+    return stoch_k, stoch_d
+
 def calculate_all_indicators(data):
     """محاسبه تمام اندیکاتورهای تکنیکال"""
-    # RSI
-    data['rsi'] = ta.momentum.RSIIndicator(data['Close'], window=14).rsi()
+    try:
+        # استفاده از کتابخانه ta اگر موجود باشد
+        data['rsi'] = ta.momentum.RSIIndicator(data['Close'], window=14).rsi()
+        
+        macd = ta.trend.MACD(data['Close'])
+        data['macd'] = macd.macd()
+        data['macd_signal'] = macd.macd_signal()
+        data['macd_histogram'] = macd.macd_diff()
+        
+        bollinger = ta.volatility.BollingerBands(data['Close'], window=20, window_dev=2)
+        data['bb_upper'] = bollinger.bollinger_hband()
+        data['bb_lower'] = bollinger.bollinger_lband()
+        data['bb_middle'] = bollinger.bollinger_mavg()
+        
+        stochastic = ta.momentum.StochasticOscillator(data['High'], data['Low'], data['Close'], window=14, smooth_window=3)
+        data['stoch_k'] = stochastic.stoch()
+        data['stoch_d'] = stochastic.stoch_signal()
+        
+        data['adx'] = ta.trend.ADXIndicator(data['High'], data['Low'], data['Close'], window=14).adx()
+        
+    except:
+        # محاسبه دستی اگر کتابخانه ta کار نکرد
+        st.info("🔧 استفاده از محاسبات دستی برای اندیکاتورها")
+        data['rsi'] = calculate_rsi(data)
+        data['macd'], data['macd_signal'], data['macd_histogram'] = calculate_macd(data)
+        data['bb_upper'], data['bb_lower'], data['bb_middle'] = calculate_bollinger_bands(data)
+        data['stoch_k'], data['stoch_d'] = calculate_stochastic(data)
+        
+        # محاسبه ADX ساده شده
+        high_low = data['High'] - data['Low']
+        high_close = np.abs(data['High'] - data['Close'].shift())
+        low_close = np.abs(data['Low'] - data['Close'].shift())
+        tr = np.maximum(high_low, np.maximum(high_close, low_close))
+        data['adx'] = tr.rolling(window=14).mean()
     
-    # MACD
-    macd = ta.trend.MACD(data['Close'])
-    data['macd'] = macd.macd()
-    data['macd_signal'] = macd.macd_signal()
-    data['macd_histogram'] = macd.macd_diff()
-    
-    # Bollinger Bands
-    bollinger = ta.volatility.BollingerBands(data['Close'], window=20, window_dev=2)
-    data['bb_upper'] = bollinger.bollinger_hband()
-    data['bb_lower'] = bollinger.bollinger_lband()
-    data['bb_middle'] = bollinger.bollinger_mavg()
-    
-    # Stochastic
-    stochastic = ta.momentum.StochasticOscillator(data['High'], data['Low'], data['Close'], window=14, smooth_window=3)
-    data['stoch_k'] = stochastic.stoch()
-    data['stoch_d'] = stochastic.stoch_signal()
-    
-    # Ichimoku
-    ichimoku = ta.trend.IchimokuIndicator(data['High'], data['Low'], window1=9, window2=26, window3=52)
-    data['ichimoku_a'] = ichimoku.ichimoku_a()
-    data['ichimoku_b'] = ichimoku.ichimoku_b()
-    data['ichimoku_base'] = ichimoku.ichimoku_base_line()
-    data['ichimoku_conversion'] = ichimoku.ichimoku_conversion_line()
-    
-    # ADX
-    data['adx'] = ta.trend.ADXIndicator(data['High'], data['Low'], data['Close'], window=14).adx()
-    
-    # Volume Indicators
+    # محاسبات حجم و میانگین‌های متحرک
     data['volume_sma'] = data['Volume'].rolling(20).mean()
-    data['obv'] = ta.volume.OnBalanceVolumeIndicator(data['Close'], data['Volume']).on_balance_volume()
+    data['obv'] = (data['Volume'] * (~data['Close'].diff().le(0) * 2 - 1)).cumsum()
     
     # Moving Averages
     data['sma_20'] = data['Close'].rolling(20).mean()
@@ -241,7 +296,11 @@ def calculate_all_indicators(data):
     data['ema_26'] = data['Close'].ewm(span=26).mean()
     
     # ATR
-    data['atr'] = ta.volatility.AverageTrueRange(data['High'], data['Low'], data['Close'], window=14).average_true_range()
+    high_low = data['High'] - data['Low']
+    high_close = np.abs(data['High'] - data['Close'].shift())
+    low_close = np.abs(data['Low'] - data['Close'].shift())
+    tr = np.maximum(high_low, np.maximum(high_close, low_close))
+    data['atr'] = tr.rolling(window=14).mean()
     
     return data
 
@@ -249,89 +308,75 @@ def generate_signals(data):
     """تولید سیگنال‌های معاملاتی"""
     signals = []
     
+    # بررسی وجود داده کافی
+    if len(data) < 20:
+        return signals
+    
     # RSI Signals
-    if data['rsi'].iloc[-1] < 30:
-        signals.append(('RSI Oversold', 'BUY', ACCENT))
-    elif data['rsi'].iloc[-1] > 70:
-        signals.append(('RSI Overbought', 'SELL', ERROR))
+    if 'rsi' in data and not pd.isna(data['rsi'].iloc[-1]):
+        if data['rsi'].iloc[-1] < 30:
+            signals.append(('RSI Oversold', 'BUY', ACCENT))
+        elif data['rsi'].iloc[-1] > 70:
+            signals.append(('RSI Overbought', 'SELL', ERROR))
     
     # MACD Signals
-    if data['macd'].iloc[-1] > data['macd_signal'].iloc[-1] and data['macd'].iloc[-2] <= data['macd_signal'].iloc[-2]:
-        signals.append(('MACD Bullish Cross', 'BUY', ACCENT))
-    elif data['macd'].iloc[-1] < data['macd_signal'].iloc[-1] and data['macd'].iloc[-2] >= data['macd_signal'].iloc[-2]:
-        signals.append(('MACD Bearish Cross', 'SELL', ERROR))
+    if 'macd' in data and 'macd_signal' in data:
+        if len(data) >= 2 and not pd.isna(data['macd'].iloc[-1]) and not pd.isna(data['macd_signal'].iloc[-1]):
+            if data['macd'].iloc[-1] > data['macd_signal'].iloc[-1] and data['macd'].iloc[-2] <= data['macd_signal'].iloc[-2]:
+                signals.append(('MACD Bullish Cross', 'BUY', ACCENT))
+            elif data['macd'].iloc[-1] < data['macd_signal'].iloc[-1] and data['macd'].iloc[-2] >= data['macd_signal'].iloc[-2]:
+                signals.append(('MACD Bearish Cross', 'SELL', ERROR))
     
     # Stochastic Signals
-    if data['stoch_k'].iloc[-1] < 20 and data['stoch_k'].iloc[-1] > data['stoch_d'].iloc[-1]:
-        signals.append(('Stochastic Oversold Bullish', 'BUY', ACCENT))
-    elif data['stoch_k'].iloc[-1] > 80 and data['stoch_k'].iloc[-1] < data['stoch_d'].iloc[-1]:
-        signals.append(('Stochastic Overbought Bearish', 'SELL', ERROR))
+    if 'stoch_k' in data and 'stoch_d' in data:
+        if not pd.isna(data['stoch_k'].iloc[-1]) and not pd.isna(data['stoch_d'].iloc[-1]):
+            if data['stoch_k'].iloc[-1] < 20 and data['stoch_k'].iloc[-1] > data['stoch_d'].iloc[-1]:
+                signals.append(('Stochastic Oversold Bullish', 'BUY', ACCENT))
+            elif data['stoch_k'].iloc[-1] > 80 and data['stoch_k'].iloc[-1] < data['stoch_d'].iloc[-1]:
+                signals.append(('Stochastic Overbought Bearish', 'SELL', ERROR))
     
     # Bollinger Bands
-    if data['Close'].iloc[-1] < data['bb_lower'].iloc[-1]:
-        signals.append(('Below Lower BB', 'BUY', ACCENT))
-    elif data['Close'].iloc[-1] > data['bb_upper'].iloc[-1]:
-        signals.append(('Above Upper BB', 'SELL', ERROR))
+    if 'bb_upper' in data and 'bb_lower' in data:
+        if not pd.isna(data['bb_lower'].iloc[-1]) and not pd.isna(data['bb_upper'].iloc[-1]):
+            if data['Close'].iloc[-1] < data['bb_lower'].iloc[-1]:
+                signals.append(('Below Lower BB', 'BUY', ACCENT))
+            elif data['Close'].iloc[-1] > data['bb_upper'].iloc[-1]:
+                signals.append(('Above Upper BB', 'SELL', ERROR))
     
     # Moving Average Crossovers
-    if data['sma_20'].iloc[-1] > data['sma_50'].iloc[-1] and data['sma_20'].iloc[-2] <= data['sma_50'].iloc[-2]:
-        signals.append(('SMA 20/50 Golden Cross', 'BUY', ACCENT))
-    elif data['sma_20'].iloc[-1] < data['sma_50'].iloc[-1] and data['sma_20'].iloc[-2] >= data['sma_50'].iloc[-2]:
-        signals.append(('SMA 20/50 Death Cross', 'SELL', ERROR))
+    if len(data) >= 2:
+        if data['sma_20'].iloc[-1] > data['sma_50'].iloc[-1] and data['sma_20'].iloc[-2] <= data['sma_50'].iloc[-2]:
+            signals.append(('SMA 20/50 Golden Cross', 'BUY', ACCENT))
+        elif data['sma_20'].iloc[-1] < data['sma_50'].iloc[-1] and data['sma_20'].iloc[-2] >= data['sma_50'].iloc[-2]:
+            signals.append(('SMA 20/50 Death Cross', 'SELL', ERROR))
     
     # ADX Strength
-    if data['adx'].iloc[-1] > 25:
-        signals.append(('Strong Trend (ADX > 25)', 'TREND', WARNING))
+    if 'adx' in data and not pd.isna(data['adx'].iloc[-1]):
+        if data['adx'].iloc[-1] > 25:
+            signals.append(('Strong Trend (ADX > 25)', 'TREND', WARNING))
     
     return signals
 
 def predict_price_trend(data):
-    """پیش‌بینی روند قیمت با ماشین لرنینگ"""
+    """پیش‌بینی روند قیمت ساده شده"""
+    if len(data) < 50:
+        return "ندارد داده کافی"
+    
     try:
-        # ایجاد ویژگی‌ها
-        df = data.copy()
-        df['price_change'] = df['Close'].pct_change()
+        # تحلیل روند ساده بر اساس Moving Average
+        short_ma = data['Close'].tail(5).mean()
+        long_ma = data['Close'].tail(20).mean()
+        current_price = data['Close'].iloc[-1]
         
-        # ایجاد ویژگی‌های تاخیری
-        for i in range(1, 6):
-            df[f'close_lag_{i}'] = df['Close'].shift(i)
-            df[f'volume_lag_{i}'] = df['Volume'].shift(i)
-        
-        # ویژگی‌های اندیکاتور
-        df['rsi'] = ta.momentum.RSIIndicator(df['Close']).rsi()
-        df['macd'] = ta.trend.MACD(df['Close']).macd()
-        
-        # هدف: تغییر قیمت در آینده
-        df['target'] = df['Close'].shift(-5) > df['Close']
-        
-        # حذف مقادیر NaN
-        df = df.dropna()
-        
-        if len(df) < 50:
-            return "ندارد داده کافی"
-        
-        # ویژگی‌ها و هدف
-        features = [col for col in df.columns if col not in ['target', 'Open', 'High', 'Low', 'Close', 'Volume']]
-        X = df[features]
-        y = df['target']
-        
-        # آموزش مدل
-        model = RandomForestRegressor(n_estimators=100, random_state=42)
-        model.fit(X, y)
-        
-        # پیش‌بینی
-        current_features = X.iloc[-1:].values
-        prediction = model.predict(current_features)[0]
-        
-        if prediction > 0.6:
+        if current_price > short_ma > long_ma:
             return "📈 صعودی"
-        elif prediction < 0.4:
+        elif current_price < short_ma < long_ma:
             return "📉 نزولی"
         else:
             return "➡️ خنثی"
             
     except Exception as e:
-        return f"خطا: {str(e)}"
+        return "خطا در تحلیل"
 
 def get_market_news(symbol):
     """دریافت اخبار بازار (شبیه‌سازی)"""
@@ -416,7 +461,7 @@ with st.sidebar:
     end_date = st.date_input("تاریخ پایان", value=default_end.date())
     end_time = st.time_input("زمان پایان", value=default_end.time())
     
-    required_candles = 1000
+    required_candles = 500  # کاهش داده برای عملکرد بهتر
     tf_map = {
         "1m": timedelta(minutes=1), "5m": timedelta(minutes=5), "15m": timedelta(minutes=15),
         "30m": timedelta(minutes=30), "1h": timedelta(hours=1), "4h": timedelta(hours=4), "1d": timedelta(days=1)
@@ -477,6 +522,7 @@ def fetch_data(symbol, start_dt, end_dt, timeframe):
             df = yf.download(ticker, start=start_dt, end=end_dt, interval=yf_interval, progress=False)
             
             if df.empty:
+                st.error("داده‌ای برای طلا یافت نشد!")
                 return None
                 
             if isinstance(df.columns, pd.MultiIndex):
@@ -504,15 +550,21 @@ def fetch_data(symbol, start_dt, end_dt, timeframe):
             until = int(end_dt.timestamp() * 1000)
             ohlcv = []
 
-            while since < until:
-                batch = exchange.fetch_ohlcv(symbol, timeframe, since=since, limit=500)
+            # محدود کردن تعداد داده‌ها برای عملکرد بهتر
+            max_candles = 1000
+            candle_count = 0
+            
+            while since < until and candle_count < max_candles:
+                batch = exchange.fetch_ohlcv(symbol, timeframe, since=since, limit=min(500, max_candles - candle_count))
                 if len(batch) == 0:
                     break
                 ohlcv += batch
+                candle_count += len(batch)
                 since = batch[-1][0] + 1
                 time.sleep(exchange.rateLimit / 1000)
 
             if len(ohlcv) == 0:
+                st.error("داده‌ای یافت نشد! نماد یا تایم‌فریم را بررسی کنید.")
                 return None
 
             data = pd.DataFrame(ohlcv, columns=['timestamp','Open','High','Low','Close','Volume'])
@@ -522,8 +574,12 @@ def fetch_data(symbol, start_dt, end_dt, timeframe):
             data = data[data.index <= pd.Timestamp(end_dt).tz_localize('Asia/Tehran')]
 
         # محاسبه اندیکاتورها
-        data = calculate_all_indicators(data)
-        return data
+        if len(data) > 0:
+            data = calculate_all_indicators(data)
+            return data
+        else:
+            st.error("داده‌های دریافتی خالی است!")
+            return None
         
     except Exception as e:
         st.error(f"خطا در دریافت داده: {str(e)}")
@@ -552,21 +608,24 @@ with tab1:
         st.metric("قیمت فعلی", f"${data['Close'].iloc[-1]:.2f}", f"{price_change:+.2f}%")
     
     with col2:
-        st.metric("RSI", f"{data['rsi'].iloc[-1]:.1f}")
+        rsi_value = data['rsi'].iloc[-1] if 'rsi' in data and not pd.isna(data['rsi'].iloc[-1]) else 0
+        st.metric("RSI", f"{rsi_value:.1f}")
     
     with col3:
-        st.metric("MACD", f"{data['macd'].iloc[-1]:.4f}")
+        macd_value = data['macd'].iloc[-1] if 'macd' in data and not pd.isna(data['macd'].iloc[-1]) else 0
+        st.metric("MACD", f"{macd_value:.4f}")
     
     with col4:
-        st.metric("شاخص ترند", f"{data['adx'].iloc[-1]:.1f}")
+        adx_value = data['adx'].iloc[-1] if 'adx' in data and not pd.isna(data['adx'].iloc[-1]) else 0
+        st.metric("شاخص ترند", f"{adx_value:.1f}")
     
     with col5:
-        volume_change = ((data['Volume'].iloc[-1] - data['Volume'].iloc[-2]) / data['Volume'].iloc[-2]) * 100
+        volume_change = ((data['Volume'].iloc[-1] - data['Volume'].mean()) / data['Volume'].mean()) * 100 if len(data) > 1 else 0
         st.metric("حجم", f"{data['Volume'].iloc[-1]:.0f}", f"{volume_change:+.1f}%")
     
     with col6:
         prediction = predict_price_trend(data)
-        st.metric("پیش‌بینی AI", prediction)
+        st.metric("پیش‌بینی روند", prediction)
     
     # چارت اصلی
     fig_main = make_subplots(
@@ -587,21 +646,28 @@ with tab1:
     fig_main.add_trace(go.Scatter(x=data.index, y=data['sma_20'], name="SMA 20", line=dict(color='orange')), row=1, col=1)
     fig_main.add_trace(go.Scatter(x=data.index, y=data['sma_50'], name="SMA 50", line=dict(color='purple')), row=1, col=1)
     
-    # Bollinger Bands
-    fig_main.add_trace(go.Scatter(x=data.index, y=data['bb_upper'], name="BB Upper", line=dict(color='gray', dash='dash')), row=1, col=1)
-    fig_main.add_trace(go.Scatter(x=data.index, y=data['bb_lower'], name="BB Lower", line=dict(color='gray', dash='dash'), fill='tonexty'), row=1, col=1)
+    # Bollinger Bands (اگر موجود باشد)
+    if 'bb_upper' in data:
+        fig_main.add_trace(go.Scatter(x=data.index, y=data['bb_upper'], name="BB Upper", line=dict(color='gray', dash='dash')), row=1, col=1)
+        fig_main.add_trace(go.Scatter(x=data.index, y=data['bb_lower'], name="BB Lower", line=dict(color='gray', dash='dash'), fill='tonexty'), row=1, col=1)
     
-    # MACD
-    fig_main.add_trace(go.Scatter(x=data.index, y=data['macd'], name="MACD", line=dict(color=ACCENT)), row=2, col=1)
-    fig_main.add_trace(go.Scatter(x=data.index, y=data['macd_signal'], name="Signal", line=dict(color=ERROR)), row=2, col=1)
-    fig_main.add_trace(go.Bar(x=data.index, y=data['macd_histogram'], name="Histogram", marker_color=MUTED), row=2, col=1)
+    # MACD (اگر موجود باشد)
+    if 'macd' in data:
+        fig_main.add_trace(go.Scatter(x=data.index, y=data['macd'], name="MACD", line=dict(color=ACCENT)), row=2, col=1)
+        fig_main.add_trace(go.Scatter(x=data.index, y=data['macd_signal'], name="Signal", line=dict(color=ERROR)), row=2, col=1)
     
-    # RSI
-    fig_main.add_trace(go.Scatter(x=data.index, y=data['rsi'], name="RSI", line=dict(color=ACCENT_SECOND)), row=3, col=1)
-    fig_main.add_hline(y=70, line_dash="dash", line_color=ERROR, row=3, col=1)
-    fig_main.add_hline(y=30, line_dash="dash", line_color=ACCENT, row=3, col=1)
+    # RSI (اگر موجود باشد)
+    if 'rsi' in data:
+        fig_main.add_trace(go.Scatter(x=data.index, y=data['rsi'], name="RSI", line=dict(color=ACCENT_SECOND)), row=3, col=1)
+        fig_main.add_hline(y=70, line_dash="dash", line_color=ERROR, row=3, col=1)
+        fig_main.add_hline(y=30, line_dash="dash", line_color=ACCENT, row=3, col=1)
     
-    fig_main.update_layout(height=800, showlegend=True, template="plotly_dark")
+    fig_main.update_layout(
+        height=800, 
+        showlegend=True, 
+        template="plotly_dark",
+        xaxis_rangeslider_visible=False
+    )
     st.plotly_chart(fig_main, use_container_width=True)
 
 # -------------------------------
@@ -614,36 +680,38 @@ with tab2:
     
     with col1:
         # Stochastic
-        fig_stoch = go.Figure()
-        fig_stoch.add_trace(go.Scatter(x=data.index, y=data['stoch_k'], name="%K", line=dict(color=ACCENT)))
-        fig_stoch.add_trace(go.Scatter(x=data.index, y=data['stoch_d'], name="%D", line=dict(color=ACCENT_SECOND)))
-        fig_stoch.add_hline(y=80, line_dash="dash", line_color=ERROR)
-        fig_stoch.add_hline(y=20, line_dash="dash", line_color=ACCENT)
-        fig_stoch.update_layout(title="Stochastic Oscillator", height=400, template="plotly_dark")
-        st.plotly_chart(fig_stoch, use_container_width=True)
+        if 'stoch_k' in data:
+            fig_stoch = go.Figure()
+            fig_stoch.add_trace(go.Scatter(x=data.index, y=data['stoch_k'], name="%K", line=dict(color=ACCENT)))
+            fig_stoch.add_trace(go.Scatter(x=data.index, y=data['stoch_d'], name="%D", line=dict(color=ACCENT_SECOND)))
+            fig_stoch.add_hline(y=80, line_dash="dash", line_color=ERROR)
+            fig_stoch.add_hline(y=20, line_dash="dash", line_color=ACCENT)
+            fig_stoch.update_layout(title="Stochastic Oscillator", height=400, template="plotly_dark")
+            st.plotly_chart(fig_stoch, use_container_width=True)
         
         # Volume Analysis
         fig_vol = go.Figure()
         fig_vol.add_trace(go.Bar(x=data.index, y=data['Volume'], name="Volume", marker_color=MUTED))
-        fig_vol.add_trace(go.Scatter(x=data.index, y=data['volume_sma'], name="Volume MA", line=dict(color=WARNING)))
+        if 'volume_sma' in data:
+            fig_vol.add_trace(go.Scatter(x=data.index, y=data['volume_sma'], name="Volume MA", line=dict(color=WARNING)))
         fig_vol.update_layout(title="Volume Analysis", height=400, template="plotly_dark")
         st.plotly_chart(fig_vol, use_container_width=True)
     
     with col2:
         # ADX
-        fig_adx = go.Figure()
-        fig_adx.add_trace(go.Scatter(x=data.index, y=data['adx'], name="ADX", line=dict(color=WARNING)))
-        fig_adx.add_hline(y=25, line_dash="dash", line_color=ACCENT, annotation_text="Strong Trend")
-        fig_adx.update_layout(title="ADX - Trend Strength", height=400, template="plotly_dark")
-        st.plotly_chart(fig_adx, use_container_width=True)
+        if 'adx' in data:
+            fig_adx = go.Figure()
+            fig_adx.add_trace(go.Scatter(x=data.index, y=data['adx'], name="ADX", line=dict(color=WARNING)))
+            fig_adx.add_hline(y=25, line_dash="dash", line_color=ACCENT, annotation_text="Strong Trend")
+            fig_adx.update_layout(title="ADX - Trend Strength", height=400, template="plotly_dark")
+            st.plotly_chart(fig_adx, use_container_width=True)
         
-        # Ichimoku Cloud
-        fig_ichi = go.Figure()
-        fig_ichi.add_trace(go.Scatter(x=data.index, y=data['ichimoku_a'], name="Ichimoku A", line=dict(color=ACCENT)))
-        fig_ichi.add_trace(go.Scatter(x=data.index, y=data['ichimoku_b'], name="Ichimoku B", line=dict(color=ERROR)))
-        fig_ichi.add_trace(go.Scatter(x=data.index, y=data['Close'], name="Price", line=dict(color=TEXT)))
-        fig_ichi.update_layout(title="Ichimoku Cloud", height=400, template="plotly_dark")
-        st.plotly_chart(fig_ichi, use_container_width=True)
+        # OBV
+        if 'obv' in data:
+            fig_obv = go.Figure()
+            fig_obv.add_trace(go.Scatter(x=data.index, y=data['obv'], name="OBV", line=dict(color=ACCENT)))
+            fig_obv.update_layout(title="On Balance Volume", height=400, template="plotly_dark")
+            st.plotly_chart(fig_obv, use_container_width=True)
 
 # -------------------------------
 # تب 3: سیگنال‌های معاملاتی
@@ -677,7 +745,7 @@ with tab3:
         st.markdown("### 📈 قدرت روند")
         
         # تحلیل روند
-        trend_strength = data['adx'].iloc[-1]
+        trend_strength = data['adx'].iloc[-1] if 'adx' in data else 0
         if trend_strength > 25:
             trend_status = "قوی"
             trend_color = ACCENT
@@ -697,7 +765,7 @@ with tab3:
         """, unsafe_allow_html=True)
         
         # تحلیل نوسان
-        volatility = data['atr'].iloc[-1] / data['Close'].iloc[-1] * 100
+        volatility = data['atr'].iloc[-1] / data['Close'].iloc[-1] * 100 if 'atr' in data else 0
         st.metric("نوسان بازار", f"{volatility:.2f}%")
     
     # هشدارهای قیمتی
@@ -711,16 +779,19 @@ with tab3:
         alert_type = st.selectbox("نوع هشدار", ["بالاتر از", "پایین‌تر از"])
     
     with col5:
-        st.button("💾 ذخیره هشدار", use_container_width=True)
+        if st.button("💾 ذخیره هشدار", use_container_width=True):
+            st.success("✅ هشدار ذخیره شد!")
     
     # تاریخچه سیگنال‌ها
     st.markdown("### 📋 تاریخچه سیگنال‌ها")
+    
+    # ایجاد داده‌های نمونه برای تاریخچه
+    history_data = data.tail(10).copy()
     signal_history = pd.DataFrame({
-        'تاریخ': data.index[-10:],
-        'قیمت': data['Close'].tail(10).round(2),
-        'RSI': data['rsi'].tail(10).round(1),
-        'MACD': data['macd'].tail(10).round(4),
-        'سیگنال': ['خرید' if x > 0 else 'فروش' for x in data['macd'].tail(10) - data['macd_signal'].tail(10)]
+        'تاریخ': history_data.index,
+        'قیمت': history_data['Close'].round(2),
+        'RSI': history_data['rsi'].round(1) if 'rsi' in history_data else [0] * len(history_data),
+        'سیگنال': ['خرید' if x > 0 else 'فروش' for x in history_data['Close'].diff()]
     })
     st.dataframe(signal_history, use_container_width=True)
 
@@ -792,9 +863,10 @@ with tab4:
     labels = [asset for asset in portfolio.keys() if asset != 'Cash']
     values = [portfolio[asset]['amount'] * portfolio[asset]['current_price'] for asset in labels]
     
-    fig_pie = go.Figure(data=[go.Pie(labels=labels, values=values, hole=.3)])
-    fig_pie.update_layout(title="توزیع دارایی‌ها", template="plotly_dark")
-    st.plotly_chart(fig_pie, use_container_width=True)
+    if sum(values) > 0:  # فقط اگر مقادیر مثبت وجود دارد
+        fig_pie = go.Figure(data=[go.Pie(labels=labels, values=values, hole=.3)])
+        fig_pie.update_layout(title="توزیع دارایی‌ها", template="plotly_dark")
+        st.plotly_chart(fig_pie, use_container_width=True)
 
 # -------------------------------
 # تب 5: اخبار و تحلیل
@@ -829,7 +901,6 @@ with tab5:
             ("قدرت روند", "قوی" if data['adx'].iloc[-1] > 25 else "متوسط" if data['adx'].iloc[-1] > 15 else "ضعیف"),
             ("اشباع خرید", "بله" if data['rsi'].iloc[-1] > 70 else "خیر"),
             ("اشباع فروش", "بله" if data['rsi'].iloc[-1] < 30 else "خیر"),
-            ("واگرایی", "ندارد"),
         ]
         
         for item, value in technical_analysis:
@@ -840,9 +911,9 @@ with tab5:
         st.markdown("### 😊 تحلیل احساسات")
         
         sentiment_data = {
-            'شاخص': ['ترس و طمع', 'احساسات بازار', 'فعالیت معاملاتی', 'اخبار مثبت'],
-            'مقدار': [65, 72, 58, 45],
-            'وضعیت': ['متوسط', 'مثبت', 'متوسط', 'منفی']
+            'شاخص': ['ترس و طمع', 'احساسات بازار', 'فعالیت معاملاتی'],
+            'مقدار': [65, 72, 58],
+            'وضعیت': ['متوسط', 'مثبت', 'متوسط']
         }
         
         for i, (indicator, value, status) in enumerate(zip(sentiment_data['شاخص'], sentiment_data['مقدار'], sentiment_data['وضعیت'])):
@@ -895,12 +966,12 @@ if 'portfolio' not in st.session_state:
 # -------------------------------
 # نوتیفیکیشن‌های زنده (شبیه‌سازی)
 # -------------------------------
-if st.button('🔔 بررسی نوتیفیکیشن‌ها'):
+if st.sidebar.button('🔔 بررسی نوتیفیکیشن‌ها'):
     if signals:
         latest_signal = signals[0]
-        st.toast(f"سیگنال جدید: {latest_signal[0]} - {latest_signal[1]}", icon="🚨")
+        st.sidebar.success(f"سیگنال جدید: {latest_signal[0]} - {latest_signal[1]}")
     else:
-        st.toast("هیچ سیگنال جدیدی یافت نشد", icon="ℹ️")
+        st.sidebar.info("هیچ سیگنال جدیدی یافت نشد")
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("""
