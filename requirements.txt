@@ -9,3 +9,6 @@ scipy
 PyWavelets
 scikit-learn
 ccxt
+tensorflow
+websockets
+sqlite3
