@@ -11,7 +11,7 @@ import warnings
 warnings.filterwarnings('ignore')
 
 # --------------------------------------------------
-# کامل‌ترین نسخه Dashboard تحلیل تکنیکال - نسخه بدون نیاز به نصب
+# کامل‌ترین نسخه Dashboard تحلیل تکنیکال - نسخه اصلاح شده
 # --------------------------------------------------
 
 # -------------------------------
@@ -139,13 +139,6 @@ CUSTOM_CSS = f"""
   color: {MUTED};
 }}
 
-.tab-container {{
-  background: var(--card);
-  border-radius: 12px;
-  padding: 20px;
-  margin: 10px 0;
-}}
-
 @keyframes pulse {{
   0% {{ opacity: 1; }}
   50% {{ opacity: 0.5; }}
@@ -166,18 +159,6 @@ CUSTOM_CSS = f"""
   font-weight: bold;
 }}
 
-.signal-neutral {{
-  color: {MUTED} !important;
-}}
-
-.news-card {{
-  background: linear-gradient(135deg, rgba(11,18,32,0.6), rgba(15,23,36,0.4));
-  border-radius: 8px;
-  padding: 12px;
-  margin: 8px 0;
-  border-left: 4px solid {ACCENT};
-}}
-
 .alert-card {{
   background: linear-gradient(135deg, rgba(251,113,133,0.1), rgba(251,191,36,0.1));
   border-radius: 8px;
@@ -190,105 +171,136 @@ CUSTOM_CSS = f"""
 st.markdown(f"<style>{CUSTOM_CSS}</style>", unsafe_allow_html=True)
 
 # -------------------------------
-# توابع محاسبه اندیکاتورها - بدون نیاز به کتابخانه اضافی
+# توابع محاسبه اندیکاتورها - نسخه ایمن
 # -------------------------------
 
 def calculate_rsi(data, window=14):
     """محاسبه RSI دستی"""
-    delta = data['Close'].diff()
-    
-    gain = (delta.where(delta > 0, 0)).fillna(0)
-    loss = (-delta.where(delta < 0, 0)).fillna(0)
-    
-    avg_gain = gain.rolling(window=window).mean()
-    avg_loss = loss.rolling(window=window).mean()
-    
-    rs = avg_gain / avg_loss
-    rsi = 100 - (100 / (1 + rs))
-    
-    return rsi
+    try:
+        delta = data['Close'].diff()
+        
+        gain = (delta.where(delta > 0, 0)).fillna(0)
+        loss = (-delta.where(delta < 0, 0)).fillna(0)
+        
+        avg_gain = gain.rolling(window=window, min_periods=1).mean()
+        avg_loss = loss.rolling(window=window, min_periods=1).mean()
+        
+        rs = avg_gain / avg_loss
+        rsi = 100 - (100 / (1 + rs))
+        
+        return rsi.fillna(50)  # مقدار پیش‌فرض 50 برای داده‌های ناکافی
+    except:
+        return pd.Series([50] * len(data), index=data.index)
 
 def calculate_macd(data, fast=12, slow=26, signal=9):
     """محاسبه MACD دستی"""
-    ema_fast = data['Close'].ewm(span=fast, adjust=False).mean()
-    ema_slow = data['Close'].ewm(span=slow, adjust=False).mean()
-    
-    macd = ema_fast - ema_slow
-    macd_signal = macd.ewm(span=signal, adjust=False).mean()
-    macd_histogram = macd - macd_signal
-    
-    return macd, macd_signal, macd_histogram
+    try:
+        ema_fast = data['Close'].ewm(span=fast, adjust=False).mean()
+        ema_slow = data['Close'].ewm(span=slow, adjust=False).mean()
+        
+        macd = ema_fast - ema_slow
+        macd_signal = macd.ewm(span=signal, adjust=False).mean()
+        macd_histogram = macd - macd_signal
+        
+        return macd, macd_signal, macd_histogram
+    except:
+        zeros = pd.Series([0] * len(data), index=data.index)
+        return zeros, zeros, zeros
 
 def calculate_bollinger_bands(data, window=20, num_std=2):
     """محاسبه Bollinger Bands دستی"""
-    sma = data['Close'].rolling(window=window).mean()
-    std = data['Close'].rolling(window=window).std()
-    
-    upper_band = sma + (std * num_std)
-    lower_band = sma - (std * num_std)
-    
-    return upper_band, lower_band, sma
+    try:
+        sma = data['Close'].rolling(window=window, min_periods=1).mean()
+        std = data['Close'].rolling(window=window, min_periods=1).std()
+        
+        upper_band = sma + (std * num_std)
+        lower_band = sma - (std * num_std)
+        
+        return upper_band.fillna(method='bfill'), lower_band.fillna(method='bfill'), sma
+    except:
+        price = data['Close']
+        return price, price, price
 
 def calculate_stochastic(data, k_window=14, d_window=3):
     """محاسبه Stochastic دستی"""
-    low_min = data['Low'].rolling(window=k_window).min()
-    high_max = data['High'].rolling(window=k_window).max()
-    
-    stoch_k = ((data['Close'] - low_min) / (high_max - low_min)) * 100
-    stoch_d = stoch_k.rolling(window=d_window).mean()
-    
-    return stoch_k, stoch_d
+    try:
+        low_min = data['Low'].rolling(window=k_window, min_periods=1).min()
+        high_max = data['High'].rolling(window=k_window, min_periods=1).max()
+        
+        stoch_k = ((data['Close'] - low_min) / (high_max - low_min)) * 100
+        stoch_d = stoch_k.rolling(window=d_window, min_periods=1).mean()
+        
+        return stoch_k.fillna(50), stoch_d.fillna(50)
+    except:
+        fifties = pd.Series([50] * len(data), index=data.index)
+        return fifties, fifties
 
 def calculate_atr(data, window=14):
-    """محاسبه Average True Range دستی"""
-    high_low = data['High'] - data['Low']
-    high_close = np.abs(data['High'] - data['Close'].shift())
-    low_close = np.abs(data['Low'] - data['Close'].shift())
-    
-    tr = np.maximum.reduce([high_low, high_close, low_close])
-    atr = tr.rolling(window=window).mean()
-    
-    return atr
+    """محاسبه Average True Range دستی - نسخه ایمن"""
+    try:
+        high_low = data['High'] - data['Low']
+        high_close_prev = np.abs(data['High'] - data['Close'].shift(1))
+        low_close_prev = np.abs(data['Low'] - data['Close'].shift(1))
+        
+        # جایگزینی مقادیر NaN با high_low
+        high_close_prev = high_close_prev.fillna(high_low)
+        low_close_prev = low_close_prev.fillna(high_low)
+        
+        tr = np.maximum(high_low, np.maximum(high_close_prev, low_close_prev))
+        atr = tr.rolling(window=window, min_periods=1).mean()
+        
+        return atr.fillna(method='bfill')
+    except Exception as e:
+        # اگر خطایی رخ داد، یک سری ساده برگردان
+        return pd.Series([0] * len(data), index=data.index)
 
 def calculate_obv(data):
     """محاسبه On Balance Volume دستی"""
-    obv = (np.sign(data['Close'].diff()) * data['Volume']).fillna(0).cumsum()
-    return obv
+    try:
+        price_diff = data['Close'].diff()
+        obv = (np.sign(price_diff) * data['Volume']).fillna(0).cumsum()
+        return obv
+    except:
+        return pd.Series([0] * len(data), index=data.index)
 
 def calculate_all_indicators(data):
-    """محاسبه تمام اندیکاتورهای تکنیکال به صورت دستی"""
-    # RSI
-    data['rsi'] = calculate_rsi(data)
-    
-    # MACD
-    data['macd'], data['macd_signal'], data['macd_histogram'] = calculate_macd(data)
-    
-    # Bollinger Bands
-    data['bb_upper'], data['bb_lower'], data['bb_middle'] = calculate_bollinger_bands(data)
-    
-    # Stochastic
-    data['stoch_k'], data['stoch_d'] = calculate_stochastic(data)
-    
-    # ATR
-    data['atr'] = calculate_atr(data)
-    
-    # OBV
-    data['obv'] = calculate_obv(data)
-    
-    # Moving Averages
-    data['sma_5'] = data['Close'].rolling(5).mean()
-    data['sma_20'] = data['Close'].rolling(20).mean()
-    data['sma_50'] = data['Close'].rolling(50).mean()
-    data['ema_12'] = data['Close'].ewm(span=12, adjust=False).mean()
-    data['ema_26'] = data['Close'].ewm(span=26, adjust=False).mean()
-    
-    # Volume SMA
-    data['volume_sma'] = data['Volume'].rolling(20).mean()
-    
-    # ADX ساده شده (بر اساس ATR)
-    data['adx'] = data['atr'] / data['Close'] * 100  # شاخص ساده شده نوسان
-    
-    return data
+    """محاسبه تمام اندیکاتورهای تکنیکال به صورت ایمن"""
+    try:
+        # RSI
+        data['rsi'] = calculate_rsi(data)
+        
+        # MACD
+        data['macd'], data['macd_signal'], data['macd_histogram'] = calculate_macd(data)
+        
+        # Bollinger Bands
+        data['bb_upper'], data['bb_lower'], data['bb_middle'] = calculate_bollinger_bands(data)
+        
+        # Stochastic
+        data['stoch_k'], data['stoch_d'] = calculate_stochastic(data)
+        
+        # ATR
+        data['atr'] = calculate_atr(data)
+        
+        # OBV
+        data['obv'] = calculate_obv(data)
+        
+        # Moving Averages
+        data['sma_5'] = data['Close'].rolling(5, min_periods=1).mean()
+        data['sma_20'] = data['Close'].rolling(20, min_periods=1).mean()
+        data['sma_50'] = data['Close'].rolling(50, min_periods=1).mean()
+        
+        # Volume SMA
+        data['volume_sma'] = data['Volume'].rolling(20, min_periods=1).mean()
+        
+        # شاخص ساده شده نوسان (جایگزین ADX)
+        data['volatility'] = (data['High'] - data['Low']) / data['Close'] * 100
+        
+        return data
+        
+    except Exception as e:
+        st.error(f"خطا در محاسبه اندیکاتورها: {str(e)}")
+        # در صورت خطا، داده اصلی را بازگردان
+        return data
 
 def generate_signals(data):
     """تولید سیگنال‌های معاملاتی"""
@@ -299,33 +311,42 @@ def generate_signals(data):
     
     try:
         # RSI Signals
-        if not pd.isna(data['rsi'].iloc[-1]):
-            if data['rsi'].iloc[-1] < 30:
-                signals.append(('RSI Oversold', 'BUY', ACCENT))
-            elif data['rsi'].iloc[-1] > 70:
-                signals.append(('RSI Overbought', 'SELL', ERROR))
+        current_rsi = data['rsi'].iloc[-1] if not pd.isna(data['rsi'].iloc[-1]) else 50
+        if current_rsi < 30:
+            signals.append(('RSI Oversold', 'BUY', ACCENT))
+        elif current_rsi > 70:
+            signals.append(('RSI Overbought', 'SELL', ERROR))
         
         # MACD Signals
         if len(data) >= 2:
-            if not pd.isna(data['macd'].iloc[-1]) and not pd.isna(data['macd_signal'].iloc[-1]):
-                if data['macd'].iloc[-1] > data['macd_signal'].iloc[-1] and data['macd'].iloc[-2] <= data['macd_signal'].iloc[-2]:
-                    signals.append(('MACD Bullish Cross', 'BUY', ACCENT))
-                elif data['macd'].iloc[-1] < data['macd_signal'].iloc[-1] and data['macd'].iloc[-2] >= data['macd_signal'].iloc[-2]:
-                    signals.append(('MACD Bearish Cross', 'SELL', ERROR))
+            current_macd = data['macd'].iloc[-1] if not pd.isna(data['macd'].iloc[-1]) else 0
+            current_signal = data['macd_signal'].iloc[-1] if not pd.isna(data['macd_signal'].iloc[-1]) else 0
+            prev_macd = data['macd'].iloc[-2] if not pd.isna(data['macd'].iloc[-2]) else 0
+            prev_signal = data['macd_signal'].iloc[-2] if not pd.isna(data['macd_signal'].iloc[-2]) else 0
+            
+            if current_macd > current_signal and prev_macd <= prev_signal:
+                signals.append(('MACD Bullish Cross', 'BUY', ACCENT))
+            elif current_macd < current_signal and prev_macd >= prev_signal:
+                signals.append(('MACD Bearish Cross', 'SELL', ERROR))
         
         # Stochastic Signals
-        if not pd.isna(data['stoch_k'].iloc[-1]) and not pd.isna(data['stoch_d'].iloc[-1]):
-            if data['stoch_k'].iloc[-1] < 20 and data['stoch_k'].iloc[-1] > data['stoch_d'].iloc[-1]:
-                signals.append(('Stochastic Oversold', 'BUY', ACCENT))
-            elif data['stoch_k'].iloc[-1] > 80 and data['stoch_k'].iloc[-1] < data['stoch_d'].iloc[-1]:
-                signals.append(('Stochastic Overbought', 'SELL', ERROR))
+        current_stoch_k = data['stoch_k'].iloc[-1] if not pd.isna(data['stoch_k'].iloc[-1]) else 50
+        current_stoch_d = data['stoch_d'].iloc[-1] if not pd.isna(data['stoch_d'].iloc[-1]) else 50
+        
+        if current_stoch_k < 20 and current_stoch_k > current_stoch_d:
+            signals.append(('Stochastic Oversold', 'BUY', ACCENT))
+        elif current_stoch_k > 80 and current_stoch_k < current_stoch_d:
+            signals.append(('Stochastic Overbought', 'SELL', ERROR))
         
         # Bollinger Bands Signals
-        if not pd.isna(data['bb_lower'].iloc[-1]) and not pd.isna(data['bb_upper'].iloc[-1]):
-            if data['Close'].iloc[-1] < data['bb_lower'].iloc[-1]:
-                signals.append(('Below Lower BB', 'BUY', ACCENT))
-            elif data['Close'].iloc[-1] > data['bb_upper'].iloc[-1]:
-                signals.append(('Above Upper BB', 'SELL', ERROR))
+        current_close = data['Close'].iloc[-1]
+        current_bb_lower = data['bb_lower'].iloc[-1] if not pd.isna(data['bb_lower'].iloc[-1]) else current_close
+        current_bb_upper = data['bb_upper'].iloc[-1] if not pd.isna(data['bb_upper'].iloc[-1]) else current_close
+        
+        if current_close < current_bb_lower:
+            signals.append(('Below Lower BB', 'BUY', ACCENT))
+        elif current_close > current_bb_upper:
+            signals.append(('Above Upper BB', 'SELL', ERROR))
         
         # Moving Average Signals
         if data['sma_5'].iloc[-1] > data['sma_20'].iloc[-1] and data['sma_5'].iloc[-2] <= data['sma_20'].iloc[-2]:
@@ -358,33 +379,6 @@ def predict_price_trend(data):
     except:
         return "خطا در تحلیل"
 
-def get_market_news(symbol):
-    """دریافت اخبار بازار (شبیه‌سازی)"""
-    base_symbol = symbol.split('/')[0] if '/' in symbol else symbol
-    news_items = [
-        {
-            'title': f'تحلیل تکنیکال {base_symbol}',
-            'summary': 'روند کنونی نیازمند بررسی دقیق تر است.',
-            'sentiment': 'neutral',
-            'time': 'امروز'
-        },
-        {
-            'title': f'وضعیت بازار {base_symbol}',
-            'summary': 'نوسانات معمول بازار در جریان است.',
-            'sentiment': 'neutral',
-            'time': 'امروز'
-        }
-    ]
-    return news_items
-
-def create_portfolio():
-    """ایجاد پورت‌فولیو شبیه‌سازی شده"""
-    return {
-        'BTC': {'amount': 0.1, 'avg_price': 45000, 'current_price': 52000},
-        'ETH': {'amount': 2.0, 'avg_price': 3200, 'current_price': 3500},
-        'Cash': {'amount': 5000, 'avg_price': 1, 'current_price': 1}
-    }
-
 # -------------------------------
 # نوار کناری
 # -------------------------------
@@ -399,18 +393,17 @@ with st.sidebar:
     st.markdown("---")
     
     # انتخاب نماد
-    symbols = ["BTC/USD", "ETH/USD", "ADA/USD", "SOL/USD", "DOGE/USD", "Gold"]
+    symbols = ["BTC/USD", "ETH/USD", "ADA/USD", "SOL/USD", "Gold"]
     symbol = st.selectbox("**انتخاب نماد**", options=symbols, index=1)
     
     # تنظیمات تایم‌فریم
-    timeframe = st.selectbox("**تایم‌فریم**", options=["1h", "4h", "1d", "1w"], index=2)
+    timeframe = st.selectbox("**تایم‌فریم**", options=["1d", "1h", "4h"], index=0)
     
     st.markdown("---")
     
     # تنظیمات تاریخ
     st.markdown("**بازه زمانی**")
     
-    # تنظیم تاریخ پیش‌فرض
     end_date = st.date_input("تاریخ پایان", value=datetime.now().date())
     days_back = st.slider("**تعداد روزهای گذشته**", 30, 365, 90)
     
@@ -419,25 +412,23 @@ with st.sidebar:
     st.markdown(f"**تاریخ شروع:** {start_date.strftime('%Y-%m-%d')}")
     
     st.markdown("---")
-    
-    # اطلاعات سیستم
     st.markdown("**وضعیت سیستم**")
     st.markdown("🟢 آنلاین")
-    st.markdown(f"🔧 نسخه: 2.0")
 
 # -------------------------------
 # دریافت داده‌ها
 # -------------------------------
-@st.cache_data(ttl=3600)  # کش برای 1 ساعت
+@st.cache_data(ttl=3600)
 def fetch_data(symbol, start_date, end_date, timeframe):
     """دریافت داده‌ها از API"""
     try:
         if symbol == "Gold":
             # داده‌های طلا از Yahoo Finance
             ticker = "GC=F"
-            df = yf.download(ticker, start=start_date, end=end_date + timedelta(days=1), interval="1d")
+            df = yf.download(ticker, start=start_date, end=end_date + timedelta(days=1))
             
             if df.empty:
+                st.error("داده‌ای برای طلا یافت نشد!")
                 return None
                 
             data = df.rename(columns={
@@ -446,31 +437,23 @@ def fetch_data(symbol, start_date, end_date, timeframe):
             }).copy()
             
         else:
-            # داده‌های ارز دیجیتال از Coinbase
-            exchange = ccxt.coinbase()
+            # داده‌های ارز دیجیتال از Binance (رایگان)
+            exchange = ccxt.binance()
             symbol_ccxt = symbol
             
-            # تبدیل تایم‌فریم به فرمت CCxt
-            tf_map = {"1h": "1h", "4h": "4h", "1d": "1d", "1w": "1w"}
+            # تبدیل تایم‌فریم
+            tf_map = {"1h": "1h", "4h": "4h", "1d": "1d"}
             timeframe_ccxt = tf_map.get(timeframe, "1d")
             
             # تبدیل تاریخ به timestamp
             since = int(datetime.combine(start_date, datetime.min.time()).timestamp() * 1000)
-            until = int(datetime.combine(end_date, datetime.max.time()).timestamp() * 1000)
             
-            ohlcv = []
-            current_since = since
-            
-            while current_since < until:
-                try:
-                    batch = exchange.fetch_ohlcv(symbol_ccxt, timeframe_ccxt, since=current_since, limit=300)
-                    if not batch:
-                        break
-                    ohlcv.extend(batch)
-                    current_since = batch[-1][0] + 1
-                    time.sleep(0.1)  # جلوگیری از rate limit
-                except Exception as e:
-                    break
+            try:
+                ohlcv = exchange.fetch_ohlcv(symbol_ccxt, timeframe_ccxt, since=since, limit=1000)
+            except:
+                # اگر خطا داد، از Coinbase امتحان کن
+                exchange = ccxt.coinbase()
+                ohlcv = exchange.fetch_ohlcv(symbol_ccxt, timeframe_ccxt, since=since, limit=1000)
             
             if not ohlcv:
                 return None
@@ -510,105 +493,98 @@ with st.spinner("🔬 در حال محاسبه اندیکاتورها..."):
     data = calculate_all_indicators(data)
 
 # -------------------------------
-# تب‌های اصلی
+# نمایش اطلاعات اصلی
 # -------------------------------
-tab1, tab2, tab3 = st.tabs(["📈 چارت اصلی", "📊 اندیکاتورها", "⚡ سیگنال‌ها"])
+col1, col2, col3, col4 = st.columns(4)
+
+current_price = data['Close'].iloc[-1]
+price_change_pct = ((current_price - data['Close'].iloc[0]) / data['Close'].iloc[0]) * 100
+price_change_color = ACCENT if price_change_pct >= 0 else ERROR
+
+with col1:
+    st.metric("قیمت فعلی", f"${current_price:.2f}", f"{price_change_pct:+.2f}%")
+
+with col2:
+    rsi_value = data['rsi'].iloc[-1] if not pd.isna(data['rsi'].iloc[-1]) else 50
+    rsi_color = ACCENT if rsi_value < 30 else ERROR if rsi_value > 70 else MUTED
+    st.metric("RSI", f"{rsi_value:.1f}")
+
+with col3:
+    volume = data['Volume'].iloc[-1]
+    st.metric("حجم", f"{volume:,.0f}")
+
+with col4:
+    trend = predict_price_trend(data)
+    st.metric("پیش‌بینی روند", trend)
+
+# -------------------------------
+# چارت اصلی
+# -------------------------------
+st.markdown("### 📈 چارت قیمت و اندیکاتورها")
+
+# ایجاد تب‌های مختلف برای چارت‌ها
+tab1, tab2, tab3 = st.tabs(["چارت قیمت", "اندیکاتورها", "سیگنال‌ها"])
 
 with tab1:
-    # متریک‌های سریع
-    col1, col2, col3, col4 = st.columns(4)
-    
-    current_price = data['Close'].iloc[-1]
-    price_change = ((current_price - data['Close'].iloc[0]) / data['Close'].iloc[0]) * 100
-    
-    with col1:
-        st.metric("قیمت فعلی", f"${current_price:.2f}")
-    
-    with col2:
-        st.metric("تغییر کل", f"{price_change:+.2f}%")
-    
-    with col3:
-        rsi_value = data['rsi'].iloc[-1] if not pd.isna(data['rsi'].iloc[-1]) else 50
-        st.metric("RSI", f"{rsi_value:.1f}")
-    
-    with col4:
-        trend = predict_price_trend(data)
-        st.metric("پیش‌بینی", trend)
-    
-    # چارت اصلی
-    fig = make_subplots(
-        rows=2, cols=1,
-        shared_xaxes=True,
-        vertical_spacing=0.05,
-        row_heights=[0.7, 0.3],
-        subplot_titles=('چارت قیمت', 'حجم معاملات')
-    )
+    # چارت قیمت با Bollinger Bands
+    fig_price = go.Figure()
     
     # کندل‌استیک
-    fig.add_trace(go.Candlestick(
+    fig_price.add_trace(go.Candlestick(
         x=data.index,
         open=data['Open'],
         high=data['High'],
         low=data['Low'],
         close=data['Close'],
         name="Price"
-    ), row=1, col=1)
-    
-    # Moving Averages
-    fig.add_trace(go.Scatter(x=data.index, y=data['sma_20'], name="SMA 20", line=dict(color='orange')), row=1, col=1)
-    fig.add_trace(go.Scatter(x=data.index, y=data['sma_50'], name="SMA 50", line=dict(color='purple')), row=1, col=1)
+    ))
     
     # Bollinger Bands
-    fig.add_trace(go.Scatter(x=data.index, y=data['bb_upper'], name="BB Upper", line=dict(color='gray', dash='dash')), row=1, col=1)
-    fig.add_trace(go.Scatter(x=data.index, y=data['bb_lower'], name="BB Lower", line=dict(color='gray', dash='dash'), fill='tonexty'), row=1, col=1)
+    fig_price.add_trace(go.Scatter(x=data.index, y=data['bb_upper'], 
+                                 name="BB Upper", line=dict(color='gray', dash='dash')))
+    fig_price.add_trace(go.Scatter(x=data.index, y=data['bb_lower'], 
+                                 name="BB Lower", line=dict(color='gray', dash='dash'),
+                                 fill='tonexty', fillcolor='rgba(128,128,128,0.1)'))
     
-    # حجم معاملات
-    colors = ['green' if data['Close'].iloc[i] >= data['Open'].iloc[i] else 'red' for i in range(len(data))]
-    fig.add_trace(go.Bar(x=data.index, y=data['Volume'], name="Volume", marker_color=colors), row=2, col=1)
-    
-    fig.update_layout(height=600, template="plotly_dark", showlegend=True)
-    st.plotly_chart(fig, use_container_width=True)
+    fig_price.update_layout(height=500, template="plotly_dark", title="چارت قیمت با Bollinger Bands")
+    st.plotly_chart(fig_price, use_container_width=True)
 
 with tab2:
-    st.subheader("📊 اندیکاتورهای تکنیکال")
+    # اندیکاتورها در ساب‌پلات
+    fig_indicators = make_subplots(
+        rows=3, cols=1,
+        shared_xaxes=True,
+        vertical_spacing=0.05,
+        subplot_titles=('RSI', 'MACD', 'Stochastic')
+    )
     
-    col1, col2 = st.columns(2)
+    # RSI
+    fig_indicators.add_trace(go.Scatter(x=data.index, y=data['rsi'], name="RSI", 
+                                      line=dict(color=ACCENT)), row=1, col=1)
+    fig_indicators.add_hline(y=70, line_dash="dash", line_color=ERROR, row=1, col=1)
+    fig_indicators.add_hline(y=30, line_dash="dash", line_color=ACCENT, row=1, col=1)
     
-    with col1:
-        # RSI
-        fig_rsi = go.Figure()
-        fig_rsi.add_trace(go.Scatter(x=data.index, y=data['rsi'], name="RSI", line=dict(color=ACCENT)))
-        fig_rsi.add_hline(y=70, line_dash="dash", line_color=ERROR)
-        fig_rsi.add_hline(y=30, line_dash="dash", line_color=ACCENT)
-        fig_rsi.update_layout(title="RSI Indicator", height=300, template="plotly_dark")
-        st.plotly_chart(fig_rsi, use_container_width=True)
-        
-        # MACD
-        fig_macd = go.Figure()
-        fig_macd.add_trace(go.Scatter(x=data.index, y=data['macd'], name="MACD", line=dict(color=ACCENT)))
-        fig_macd.add_trace(go.Scatter(x=data.index, y=data['macd_signal'], name="Signal", line=dict(color=ERROR)))
-        fig_macd.add_trace(go.Bar(x=data.index, y=data['macd_histogram'], name="Histogram", marker_color=MUTED))
-        fig_macd.update_layout(title="MACD", height=300, template="plotly_dark")
-        st.plotly_chart(fig_macd, use_container_width=True)
+    # MACD
+    fig_indicators.add_trace(go.Scatter(x=data.index, y=data['macd'], name="MACD", 
+                                      line=dict(color=ACCENT)), row=2, col=1)
+    fig_indicators.add_trace(go.Scatter(x=data.index, y=data['macd_signal'], name="Signal", 
+                                      line=dict(color=ERROR)), row=2, col=1)
+    fig_indicators.add_trace(go.Bar(x=data.index, y=data['macd_histogram'], name="Histogram", 
+                                  marker_color=MUTED), row=2, col=1)
     
-    with col2:
-        # Stochastic
-        fig_stoch = go.Figure()
-        fig_stoch.add_trace(go.Scatter(x=data.index, y=data['stoch_k'], name="%K", line=dict(color=ACCENT)))
-        fig_stoch.add_trace(go.Scatter(x=data.index, y=data['stoch_d'], name="%D", line=dict(color=ACCENT_SECOND)))
-        fig_stoch.add_hline(y=80, line_dash="dash", line_color=ERROR)
-        fig_stoch.add_hline(y=20, line_dash="dash", line_color=ACCENT)
-        fig_stoch.update_layout(title="Stochastic", height=300, template="plotly_dark")
-        st.plotly_chart(fig_stoch, use_container_width=True)
-        
-        # Volume Analysis
-        fig_vol = go.Figure()
-        fig_vol.add_trace(go.Bar(x=data.index, y=data['Volume'], name="Volume", marker_color=MUTED))
-        fig_vol.add_trace(go.Scatter(x=data.index, y=data['volume_sma'], name="Volume MA", line=dict(color=WARNING)))
-        fig_vol.update_layout(title="Volume Analysis", height=300, template="plotly_dark")
-        st.plotly_chart(fig_vol, use_container_width=True)
+    # Stochastic
+    fig_indicators.add_trace(go.Scatter(x=data.index, y=data['stoch_k'], name="%K", 
+                                      line=dict(color=ACCENT)), row=3, col=1)
+    fig_indicators.add_trace(go.Scatter(x=data.index, y=data['stoch_d'], name="%D", 
+                                      line=dict(color=ACCENT_SECOND)), row=3, col=1)
+    fig_indicators.add_hline(y=80, line_dash="dash", line_color=ERROR, row=3, col=1)
+    fig_indicators.add_hline(y=20, line_dash="dash", line_color=ACCENT, row=3, col=1)
+    
+    fig_indicators.update_layout(height=600, template="plotly_dark", showlegend=True)
+    st.plotly_chart(fig_indicators, use_container_width=True)
 
 with tab3:
+    # سیگنال‌ها
     st.subheader("⚡ سیگنال‌های معاملاتی")
     
     signals = generate_signals(data)
@@ -629,22 +605,16 @@ with tab3:
     else:
         st.info("📊 هیچ سیگنال واضحی شناسایی نشد. بازار در وضعیت خنثی قرار دارد.")
     
-    # تحلیل بازار
-    st.subheader("📈 تحلیل بازار")
-    
-    col1, col2, col3 = st.columns(3)
+    # اطلاعات اضافی
+    col1, col2 = st.columns(2)
     
     with col1:
-        volatility = (data['High'] - data['Low']).mean() / data['Close'].mean() * 100
-        st.metric("نوسان بازار", f"{volatility:.2f}%")
+        st.metric("میانگین حجم", f"{data['Volume'].mean():,.0f}")
+        st.metric("بالاترین قیمت", f"${data['High'].max():.2f}")
     
     with col2:
-        avg_volume = data['Volume'].mean()
-        st.metric("حجم متوسط", f"{avg_volume:,.0f}")
-    
-    with col3:
-        trend_strength = "قوی" if abs(price_change) > 10 else "متوسط" if abs(price_change) > 5 else "ضعیف"
-        st.metric("قدرت روند", trend_strength)
+        st.metric("نوسان روزانه", f"{(data['High'] - data['Low']).mean()/data['Close'].mean()*100:.2f}%")
+        st.metric("پایین‌ترین قیمت", f"${data['Low'].min():.2f}")
 
 # -------------------------------
 # پاورقی
