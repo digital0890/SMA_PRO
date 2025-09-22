@@ -1,4 +1,3 @@
-**اندیکاتور stochhastic را اضافه کن**
 
 import streamlit as st
 import ccxt
