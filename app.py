@@ -1,3 +1,5 @@
+**اندیکاتور stochhastic را اضافه کن**
+
 import streamlit as st
 import ccxt
 import pandas as pd
@@ -7,32 +9,6 @@ from plotly.subplots import make_subplots
 import time
 from datetime import datetime, timedelta
 import numpy as np
-import sqlite3
-import asyncio
-import websockets
-import json
-from sklearn.preprocessing import MinMaxScaler
-from sklearn.ensemble import RandomForestClassifier
-from scipy import stats
-from PyWavelets import wavedec
-import warnings
-warnings.filterwarnings('ignore')
-
-# Try to import tensorflow, but make it optional
-try:
-    from tensorflow.keras.models import Sequential
-    from tensorflow.keras.layers import LSTM, Dense, Dropout
-    TENSORFLOW_AVAILABLE = True
-except ImportError:
-    TENSORFLOW_AVAILABLE = False
-    st.warning("TensorFlow not available. AI features will be limited.")
-
-# Try to import pykalman
-try:
-    from pykalman import KalmanFilter
-    PYKALMAN_AVAILABLE = True
-except ImportError:
-    PYKALMAN_AVAILABLE = False
 
 # --------------------------------------------------
 # Dark Modern Themed Streamlit App - Enhanced UI
@@ -50,7 +26,6 @@ ACCENT_SECOND = "#60A5FA"
 TEXT = "#E6EEF5"
 MUTED = "#98A4B3"
 ERROR = "#FB7185"
-WARNING = "#FBBF24"
 
 CUSTOM_CSS = f"""
 {FONT_IMPORT}
@@ -164,572 +139,67 @@ CUSTOM_CSS = f"""
 .pulse {{
   animation: pulse 1.5s ease-in-out infinite;
 }}
-
-.alert-badge {{
-  background: {ERROR};
-  color: white;
-  padding: 4px 8px;
-  border-radius: 12px;
-  font-size: 12px;
-  font-weight: bold;
-}}
-
-.success-badge {{
-  background: {ACCENT};
-  color: #0f1724;
-  padding: 4px 8px;
-  border-radius: 12px;
-  font-size: 12px;
-  font-weight: bold;
-}}
 """
 
 st.markdown(f"<style>{CUSTOM_CSS}</style>", unsafe_allow_html=True)
 
 # -------------------------------
-# Database Setup
-# -------------------------------
-def init_database():
-    conn = sqlite3.connect('trading_data.db')
-    cursor = conn.cursor()
-    
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS market_data (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            symbol TEXT,
-            timestamp DATETIME,
-            open REAL,
-            high REAL,
-            low REAL,
-            close REAL,
-            volume REAL,
-            timeframe TEXT
-        )
-    ''')
-    
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS alerts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            symbol TEXT,
-            condition TEXT,
-            value REAL,
-            triggered BOOLEAN,
-            created_at DATETIME,
-            triggered_at DATETIME
-        )
-    ''')
-    
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS portfolio (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            symbol TEXT,
-            quantity REAL,
-            entry_price REAL,
-            current_price REAL,
-            pnl REAL,
-            timestamp DATETIME
-        )
-    ''')
-    
-    conn.commit()
-    conn.close()
-
-init_database()
-
-# -------------------------------
-# Advanced Technical Indicators with PyKalman and Wavelets
-# -------------------------------
-class AdvancedIndicators:
-    @staticmethod
-    def calculate_stochastic(data, k_period=14, d_period=3):
-        low_min = data['Low'].rolling(window=k_period).min()
-        high_max = data['High'].rolling(window=k_period).max()
-        
-        data['stoch_k'] = ((data['Close'] - low_min) / (high_max - low_min)) * 100
-        data['stoch_d'] = data['stoch_k'].rolling(window=d_period).mean()
-        return data
-    
-    @staticmethod
-    def calculate_ichimoku(data):
-        # Tenkan-sen (Conversion Line)
-        nine_period_high = data['High'].rolling(window=9).max()
-        nine_period_low = data['Low'].rolling(window=9).min()
-        data['tenkan_sen'] = (nine_period_high + nine_period_low) / 2
-        
-        # Kijun-sen (Base Line)
-        twenty_six_period_high = data['High'].rolling(window=26).max()
-        twenty_six_period_low = data['Low'].rolling(window=26).min()
-        data['kijun_sen'] = (twenty_six_period_high + twenty_six_period_low) / 2
-        
-        # Senkou Span A (Leading Span A)
-        data['senkou_span_a'] = ((data['tenkan_sen'] + data['kijun_sen']) / 2).shift(26)
-        
-        # Senkou Span B (Leading Span B)
-        fifty_two_period_high = data['High'].rolling(window=52).max()
-        fifty_two_period_low = data['Low'].rolling(window=52).min()
-        data['senkou_span_b'] = ((fifty_two_period_high + fifty_two_period_low) / 2).shift(26)
-        
-        # Chikou Span (Lagging Span)
-        data['chikou_span'] = data['Close'].shift(-26)
-        
-        return data
-    
-    @staticmethod
-    def calculate_fibonacci_retracement(data):
-        high = data['High'].max()
-        low = data['Low'].min()
-        diff = high - low
-        
-        levels = {
-            '0%': high,
-            '23.6%': high - diff * 0.236,
-            '38.2%': high - diff * 0.382,
-            '50%': high - diff * 0.5,
-            '61.8%': high - diff * 0.618,
-            '78.6%': high - diff * 0.786,
-            '100%': low
-        }
-        
-        return levels
-    
-    @staticmethod
-    def calculate_rsi(data, period=14):
-        delta = data['Close'].diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
-        rs = gain / loss
-        data['rsi'] = 100 - (100 / (1 + rs))
-        return data
-    
-    @staticmethod
-    def calculate_macd(data, fast=12, slow=26, signal=9):
-        exp1 = data['Close'].ewm(span=fast, adjust=False).mean()
-        exp2 = data['Close'].ewm(span=slow, adjust=False).mean()
-        data['macd'] = exp1 - exp2
-        data['macd_signal'] = data['macd'].ewm(span=signal, adjust=False).mean()
-        data['macd_histogram'] = data['macd'] - data['macd_signal']
-        return data
-    
-    @staticmethod
-    def calculate_bollinger_bands(data, period=20, std=2):
-        data['bb_middle'] = data['Close'].rolling(window=period).mean()
-        bb_std = data['Close'].rolling(window=period).std()
-        data['bb_upper'] = data['bb_middle'] + (bb_std * std)
-        data['bb_lower'] = data['bb_middle'] - (bb_std * std)
-        return data
-    
-    # Advanced indicators using PyKalman
-    @staticmethod
-    def kalman_filter_price(data):
-        if not PYKALMAN_AVAILABLE:
-            return data
-            
-        try:
-            prices = data['Close'].values
-            kf = KalmanFilter(transition_matrices=[1],
-                            observation_matrices=[1],
-                            initial_state_mean=prices[0],
-                            initial_state_covariance=1,
-                            observation_covariance=1,
-                            transition_covariance=0.01)
-            
-            state_means, _ = kf.filter(prices)
-            data['kalman_price'] = state_means.flatten()
-        except Exception as e:
-            st.warning(f"Kalman filter not available: {e}")
-            
-        return data
-    
-    # Wavelet analysis for multi-timeframe decomposition
-    @staticmethod
-    def wavelet_analysis(data, wavelet='db4', level=3):
-        try:
-            prices = data['Close'].values
-            coeffs = wavedec(prices, wavelet, level=level)
-            
-            # Reconstruct different frequency components
-            for i in range(level + 1):
-                coeff_list = [np.zeros_like(c) for c in coeffs]
-                coeff_list[i] = coeffs[i]
-                reconstructed = wavedec(coeff_list, wavelet, level=level)[0]
-                data[f'wavelet_level_{i}'] = reconstructed[:len(data)]
-                
-        except Exception as e:
-            st.warning(f"Wavelet analysis not available: {e}")
-            
-        return data
-    
-    # Statistical indicators using SciPy
-    @staticmethod
-    def statistical_indicators(data):
-        returns = data['Close'].pct_change().dropna()
-        
-        if len(returns) > 0:
-            # Calculate statistical properties
-            data['zscore'] = stats.zscore(data['Close'].dropna())
-            data['skewness'] = data['Close'].rolling(20).apply(lambda x: stats.skew(x.dropna()))
-            data['kurtosis'] = data['Close'].rolling(20).apply(lambda x: stats.kurtosis(x.dropna()))
-            
-            # Volatility measures
-            data['volatility'] = returns.rolling(20).std()
-            data['sharpe_ratio'] = (returns.rolling(20).mean() / returns.rolling(20).std()) * np.sqrt(252)
-            
-        return data
-
-# -------------------------------
-# AI Prediction Models (Optional TensorFlow)
-# -------------------------------
-class AIPredictor:
-    def __init__(self):
-        self.scaler = MinMaxScaler()
-        self.tensorflow_available = TENSORFLOW_AVAILABLE
-        
-    def create_lstm_model(self, input_shape):
-        if not self.tensorflow_available:
-            return None
-            
-        model = Sequential([
-            LSTM(50, return_sequences=True, input_shape=input_shape),
-            Dropout(0.2),
-            LSTM(50, return_sequences=True),
-            Dropout(0.2),
-            LSTM(50),
-            Dropout(0.2),
-            Dense(25),
-            Dense(1)
-        ])
-        model.compile(optimizer='adam', loss='mean_squared_error')
-        return model
-    
-    def predict_price_lstm(self, data, future_periods=10):
-        if not self.tensorflow_available or len(data) < 100:
-            # Fallback to simple linear regression
-            return self.simple_price_prediction(data, future_periods)
-            
-        try:
-            # Prepare data
-            prices = data['Close'].values.reshape(-1, 1)
-            scaled_prices = self.scaler.fit_transform(prices)
-            
-            # Create sequences
-            sequence_length = min(60, len(scaled_prices) - 10)
-            X, y = [], []
-            
-            for i in range(sequence_length, len(scaled_prices)):
-                X.append(scaled_prices[i-sequence_length:i, 0])
-                y.append(scaled_prices[i, 0])
-            
-            if len(X) == 0:
-                return self.simple_price_prediction(data, future_periods)
-                
-            X, y = np.array(X), np.array(y)
-            X = X.reshape(X.shape[0], X.shape[1], 1)
-            
-            # Train model
-            model = self.create_lstm_model((X.shape[1], 1))
-            if model:
-                model.fit(X, y, epochs=10, batch_size=32, verbose=0)
-                
-                # Predict future
-                last_sequence = scaled_prices[-sequence_length:]
-                predictions = []
-                
-                for _ in range(future_periods):
-                    pred = model.predict(last_sequence.reshape(1, sequence_length, 1), verbose=0)
-                    predictions.append(pred[0, 0])
-                    last_sequence = np.append(last_sequence[1:], pred[0])
-                
-                predictions = self.scaler.inverse_transform(np.array(predictions).reshape(-1, 1))
-                return predictions.flatten()
-            
-        except Exception as e:
-            st.warning(f"LSTM prediction failed, using fallback: {e}")
-            
-        return self.simple_price_prediction(data, future_periods)
-    
-    def simple_price_prediction(self, data, future_periods=10):
-        """Fallback prediction using linear regression"""
-        prices = data['Close'].values
-        x = np.arange(len(prices))
-        
-        # Linear regression
-        slope, intercept, r_value, p_value, std_err = stats.linregress(x, prices)
-        
-        future_x = np.arange(len(prices), len(prices) + future_periods)
-        predictions = slope * future_x + intercept
-        
-        return predictions
-    
-    def detect_trend_ml(self, data):
-        # Create features
-        data['returns'] = data['Close'].pct_change()
-        data['volatility'] = data['returns'].rolling(20).std()
-        data['momentum'] = data['Close'] - data['Close'].shift(5)
-        
-        # Target variable (1 for uptrend, 0 for downtrend)
-        data['trend'] = (data['Close'].shift(-5) > data['Close']).astype(int)
-        
-        # Prepare data for ML
-        features = ['returns', 'volatility', 'momentum']
-        data_clean = data.dropna()
-        
-        if len(data_clean) < 50:
-            return "Insufficient data"
-        
-        X = data_clean[features]
-        y = data_clean['trend']
-        
-        # Train model
-        model = RandomForestClassifier(n_estimators=100, random_state=42)
-        model.fit(X[:-5], y[:-5])  # Leave last 5 for prediction
-        
-        # Predict current trend
-        current_features = X.iloc[-1:].values
-        prediction = model.predict(current_features)[0]
-        
-        return "Uptrend" if prediction == 1 else "Downtrend"
-
-# -------------------------------
-# Alert System
-# -------------------------------
-class AlertSystem:
-    def __init__(self):
-        self.alerts = []
-    
-    def add_alert(self, symbol, condition, value):
-        conn = sqlite3.connect('trading_data.db')
-        cursor = conn.cursor()
-        cursor.execute('''
-            INSERT INTO alerts (symbol, condition, value, triggered, created_at)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (symbol, condition, value, False, datetime.now()))
-        conn.commit()
-        conn.close()
-        st.success("✅ Alert added successfully!")
-    
-    def check_alerts(self, data, symbol):
-        conn = sqlite3.connect('trading_data.db')
-        cursor = conn.cursor()
-        cursor.execute('SELECT * FROM alerts WHERE symbol = ? AND triggered = ?', (symbol, False))
-        active_alerts = cursor.fetchall()
-        
-        triggered_alerts = []
-        current_price = data['Close'].iloc[-1]
-        current_rsi = data.get('rsi', pd.Series([50])).iloc[-1]
-        
-        for alert in active_alerts:
-            alert_id, symbol, condition, value, triggered, created_at, triggered_at = alert
-            
-            condition_met = False
-            if condition == "price_above" and current_price > value:
-                condition_met = True
-            elif condition == "price_below" and current_price < value:
-                condition_met = True
-            elif condition == "rsi_oversold" and current_rsi < 30:
-                condition_met = True
-            elif condition == "rsi_overbought" and current_rsi > 70:
-                condition_met = True
-            elif condition == "stoch_oversold" and data.get('stoch_k', pd.Series([50])).iloc[-1] < 20:
-                condition_met = True
-            elif condition == "stoch_overbought" and data.get('stoch_k', pd.Series([50])).iloc[-1] > 80:
-                condition_met = True
-            
-            if condition_met:
-                cursor.execute('''
-                    UPDATE alerts SET triggered = ?, triggered_at = ? WHERE id = ?
-                ''', (True, datetime.now(), alert_id))
-                triggered_alerts.append(alert)
-        
-        conn.commit()
-        conn.close()
-        return triggered_alerts
-
-# -------------------------------
-# Portfolio Manager
-# -------------------------------
-class PortfolioManager:
-    def __init__(self, initial_balance=10000):
-        self.initial_balance = initial_balance
-        self.positions = {}
-    
-    def add_position(self, symbol, quantity, entry_price):
-        conn = sqlite3.connect('trading_data.db')
-        cursor = conn.cursor()
-        cursor.execute('''
-            INSERT INTO portfolio (symbol, quantity, entry_price, current_price, pnl, timestamp)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', (symbol, quantity, entry_price, entry_price, 0, datetime.now()))
-        conn.commit()
-        conn.close()
-        st.success(f"✅ Position added: {quantity} {symbol} @ ${entry_price}")
-    
-    def get_portfolio_summary(self):
-        conn = sqlite3.connect('trading_data.db')
-        cursor = conn.cursor()
-        cursor.execute('SELECT * FROM portfolio')
-        positions = cursor.fetchall()
-        conn.close()
-        
-        return positions
-    
-    def update_portfolio(self, current_prices):
-        positions = self.get_portfolio_summary()
-        
-        total_value = self.initial_balance
-        total_pnl = 0
-        
-        conn = sqlite3.connect('trading_data.db')
-        cursor = conn.cursor()
-        
-        for position in positions:
-            pos_id, symbol, quantity, entry_price, _, _, _ = position
-            current_price = current_prices.get(symbol, entry_price)
-            pnl = (current_price - entry_price) * quantity
-            
-            cursor.execute('''
-                UPDATE portfolio SET current_price = ?, pnl = ?, timestamp = ?
-                WHERE id = ?
-            ''', (current_price, pnl, datetime.now(), pos_id))
-            
-            total_value += pnl
-            total_pnl += pnl
-        
-        conn.commit()
-        conn.close()
-        return total_value, total_pnl
-
-# -------------------------------
-# Multi-timeframe Analysis
-# -------------------------------
-def multi_timeframe_analysis(data, symbol):
-    analysis = {}
-    
-    # Resample for different timeframes
-    timeframes = {
-        '1H': '1H',
-        '4H': '4H', 
-        '1D': '1D'
-    }
-    
-    for tf_name, tf_resample in timeframes.items():
-        try:
-            # Resample data
-            resampled = data.resample(tf_resample).agg({
-                'Open': 'first',
-                'High': 'max',
-                'Low': 'min',
-                'Close': 'last',
-                'Volume': 'sum'
-            }).dropna()
-            
-            if len(resampled) > 0:
-                # Calculate basic metrics
-                price_change = (resampled['Close'].iloc[-1] - resampled['Open'].iloc[0]) / resampled['Open'].iloc[0] * 100
-                volatility = resampled['Close'].pct_change().std() * np.sqrt(252)
-                
-                analysis[tf_name] = {
-                    'trend': 'Bullish' if price_change > 0 else 'Bearish',
-                    'price_change': price_change,
-                    'volatility': volatility,
-                    'support': resampled['Low'].min(),
-                    'resistance': resampled['High'].max(),
-                    'volume_trend': 'Increasing' if resampled['Volume'].iloc[-1] > resampled['Volume'].mean() else 'Decreasing'
-                }
-        except Exception as e:
-            st.warning(f"Could not analyze {tf_name} timeframe: {e}")
-    
-    return analysis
-
-# -------------------------------
 # Page settings
 # -------------------------------
-st.set_page_config(layout="wide", page_title="Advanced Crypto & Gold Analysis", page_icon="🚀")
+st.set_page_config(layout="wide", page_title="Crypto & Gold Supply/Demand Analysis", page_icon="📊")
 
 # -------------------------------
-# Initialize systems
+# Stochastic Oscillator Function
 # -------------------------------
-alert_system = AlertSystem()
-portfolio_manager = PortfolioManager()
-ai_predictor = AIPredictor()
-indicators = AdvancedIndicators()
+def calculate_stochastic(data, k_period=14, d_period=3):
+    """
+    Calculate Stochastic Oscillator
+    %K = (Current Close - Lowest Low) / (Highest High - Lowest Low) * 100
+    %D = 3-day SMA of %K
+    """
+    low_min = data['Low'].rolling(window=k_period).min()
+    high_max = data['High'].rolling(window=k_period).max()
+    
+    data['stoch_k'] = ((data['Close'] - low_min) / (high_max - low_min)) * 100
+    data['stoch_d'] = data['stoch_k'].rolling(window=d_period).mean()
+    
+    return data
 
 # -------------------------------
-# Sidebar with enhanced options
+# Sidebar with improved UI
 # -------------------------------
 with st.sidebar:
     st.markdown("""
     <div style='margin-bottom:20px; text-align:center;'>
-        <h2 style='margin:0; background:linear-gradient(90deg, #6EE7B7, #60A5FA); -webkit-background-clip:text; -webkit-text-fill-color:transparent;'>🚀 Advanced Analysis</h2>
-        <p style='margin:4px 0 0 0; color:#98A4B3; font-size:14px;'>AI-Powered Trading Dashboard</p>
+        <h2 style='margin:0; background:linear-gradient(90deg, #6EE7B7, #60A5FA); -webkit-background-clip:text; -webkit-text-fill-color:transparent;'>📊 Analysis</h2>
+        <p style='margin:4px 0 0 0; color:#98A4B3; font-size:14px;'>Supply/Demand Dashboard</p>
     </div>
     """, unsafe_allow_html=True)
     
     st.markdown("---")
     
-    # Symbol selection
     symbols = ["BTC/USD", "ETH/USD", "XRP/USD", "SOL/USD", "DOGE/USD", "TRX/USD", "ADA/USD", "===========", "Gold"]
-    symbol = st.selectbox("**Select Symbol**", options=symbols, index=1)
+    symbol = st.selectbox("**Select Symbol**", options=symbols, index=1, help="Choose the asset to analyze")
     
-    # Timeframe and lookback
+    timeframe = st.selectbox("**Timeframe**", options=["1m","5m","15m","30m","1h","4h","1d"], index=4, help="Select the chart timeframe")
+    lookback = st.slider("**Lookback**", 1, 10, 10, help="Number of periods to look back for Supply/Demand points")
+
+    st.markdown("---")
+    
+    # Stochastic parameters
+    st.markdown("**Stochastic Parameters**")
     col1, col2 = st.columns(2)
     with col1:
-        timeframe = st.selectbox("**Timeframe**", options=["1m","5m","15m","30m","1h","4h","1d"], index=4)
+        k_period = st.slider("**%K Period**", 5, 21, 14, help="Period for %K line")
     with col2:
-        lookback = st.slider("**Lookback**", 1, 100, 10)
+        d_period = st.slider("**%D Period**", 2, 7, 3, help="Period for %D line (SMA of %K)")
     
     st.markdown("---")
     
-    # Advanced analysis options
-    st.markdown("**🔬 Advanced Analysis**")
-    
-    enable_advanced_indicators = st.checkbox("Advanced Indicators", value=True)
-    enable_ai = st.checkbox("AI Predictions", value=TENSORFLOW_AVAILABLE)
-    enable_alerts = st.checkbox("Alert System", value=True)
-    
-    if enable_advanced_indicators:
-        with st.expander("Indicator Settings"):
-            col1, col2 = st.columns(2)
-            with col1:
-                k_period = st.slider("**%K Period**", 5, 21, 14)
-                rsi_period = st.slider("**RSI Period**", 5, 21, 14)
-            with col2:
-                d_period = st.slider("**%D Period**", 2, 7, 3)
-                bb_period = st.slider("**BB Period**", 10, 30, 20)
-    
-    st.markdown("---")
-    
-    # Alert system
-    if enable_alerts:
-        st.markdown("**🔔 Alert System**")
-        with st.expander("Set New Alert"):
-            alert_condition = st.selectbox("Condition", 
-                                         ["price_above", "price_below", "rsi_oversold", "rsi_overbought", "stoch_oversold", "stoch_overbought"])
-            alert_value = st.number_input("Value", value=1000.0, step=10.0)
-            if st.button("Add Alert", key="add_alert"):
-                alert_system.add_alert(symbol, alert_condition, alert_value)
-    
-    st.markdown("---")
-    
-    # Portfolio management
-    st.markdown("**💼 Portfolio Management**")
-    with st.expander("Add Position"):
-        col1, col2 = st.columns(2)
-        with col1:
-            pos_symbol = st.text_input("Symbol", value="BTC")
-            pos_quantity = st.number_input("Quantity", value=1.0, step=0.1)
-        with col2:
-            pos_price = st.number_input("Entry Price", value=1000.0, step=10.0)
-        
-        if st.button("Add to Portfolio"):
-            portfolio_manager.add_position(pos_symbol, pos_quantity, pos_price)
-    
-    st.markdown("---")
-    
-    # Date range
-    st.markdown("**📅 Date Range**")
+    st.markdown("**Date Range**")
     default_end = datetime.now().replace(hour=23, minute=59, second=0, microsecond=0)
-    end_date = st.date_input("End Date", value=default_end.date())
-    end_time = st.time_input("End Time", value=default_end.time())
+    end_date = st.date_input("End Date", value=default_end.date(), label_visibility="collapsed")
+    end_time = st.time_input("End Time", value=default_end.time(), label_visibility="collapsed")
 
     required_candles = 500
     tf_map = {
@@ -744,8 +214,29 @@ with st.sidebar:
     delta = tf_map[timeframe] * required_candles
     default_start = datetime.combine(end_date, end_time) - delta
 
-    start_date = st.date_input("Start Date", value=default_start.date())
-    start_time = st.time_input("Start Time", value=default_start.time())
+    start_date = st.date_input("Start Date", value=default_start.date(), label_visibility="collapsed")
+    start_time = st.time_input("Start Time", value=default_start.time(), label_visibility="collapsed")
+    
+    st.markdown("---")
+    
+    # Add some metrics in the sidebar
+    st.markdown("**Data Info**")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-label">Timeframe</div>
+            <div class="metric-value">{timeframe}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-label">Lookback</div>
+            <div class="metric-value">{lookback}</div>
+        </div>
+        """, unsafe_allow_html=True)
 
 # -------------------------------
 # Convert to timestamp
@@ -760,7 +251,7 @@ until = int(end_dt.timestamp() * 1000)
 # -------------------------------
 st.markdown(f"""
 <div class="header-container">
-    <h1 style="margin:0; font-size:32px;">{symbol} - Advanced Analysis</h1>
+    <h1 style="margin:0; font-size:32px;">{symbol}</h1>
     <p style="margin:4px 0 0 0; color:#98A4B3; font-size:16px;">
         Period: {start_dt.strftime('%Y-%m-%d %H:%M')} to {end_dt.strftime('%Y-%m-%d %H:%M')}
     </p>
@@ -773,19 +264,6 @@ st.markdown(f"""
 main_container = st.container()
 
 with main_container:
-    # Display library availability status
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        status_color = ACCENT if TENSORFLOW_AVAILABLE else ERROR
-        st.markdown(f"<div class='metric-card'><div class='metric-label'>TensorFlow</div><div class='metric-value' style='color:{status_color};'>{'✅ Available' if TENSORFLOW_AVAILABLE else '❌ Not Available'}</div></div>", unsafe_allow_html=True)
-    
-    with col2:
-        status_color = ACCENT if PYKALMAN_AVAILABLE else WARNING
-        st.markdown(f"<div class='metric-card'><div class='metric-label'>PyKalman</div><div class='metric-value' style='color:{status_color};'>{'✅ Available' if PYKALMAN_AVAILABLE else '⚠️ Limited'}</div></div>", unsafe_allow_html=True)
-    
-    with col3:
-        st.markdown(f"<div class='metric-card'><div class='metric-label'>Advanced Features</div><div class='metric-value'>{'✅ Enabled' if enable_advanced_indicators else '❌ Disabled'}</div></div>", unsafe_allow_html=True)
-
     if symbol == "Gold":
         yf_tf_map = {
             "1m": "1m",
@@ -842,18 +320,13 @@ with main_container:
         ohlcv = []
 
         with st.spinner("🔄 Fetching crypto data from exchange..."):
-            current_since = since
-            while current_since < until:
-                try:
-                    batch = exchange.fetch_ohlcv(symbol, timeframe, since=current_since, limit=500)
-                    if len(batch) == 0:
-                        break
-                    ohlcv += batch
-                    current_since = batch[-1][0] + 1
-                    time.sleep(exchange.rateLimit / 1000)
-                except Exception as e:
-                    st.error(f"Error fetching data: {e}")
+            while since < until:
+                batch = exchange.fetch_ohlcv(symbol, timeframe, since=since, limit=500)
+                if len(batch) == 0:
                     break
+                ohlcv += batch
+                since = batch[-1][0] + 1
+                time.sleep(exchange.rateLimit / 1000)
 
         if len(ohlcv) == 0:
             st.error("No data found! Check symbol or timeframe.")
@@ -866,54 +339,13 @@ with main_container:
         data = data[data.index <= pd.Timestamp(end_dt).tz_localize('Asia/Tehran')]
 
     # -------------------------------
-    # Advanced Calculations
+    # Calculations
     # -------------------------------
     data["Volume_MA20"] = data["Volume"].rolling(window=20).mean()
     
-    # Calculate basic indicators
-    data = indicators.calculate_stochastic(data, k_period, d_period)
-    data = indicators.calculate_rsi(data, rsi_period)
-    data = indicators.calculate_macd(data)
-    data = indicators.calculate_bollinger_bands(data, bb_period)
+    # Calculate Stochastic Oscillator
+    data = calculate_stochastic(data, k_period, d_period)
     
-    # Advanced indicators
-    if enable_advanced_indicators:
-        data = indicators.calculate_ichimoku(data)
-        data = indicators.statistical_indicators(data)
-        
-        if PYKALMAN_AVAILABLE:
-            data = indicators.kalman_filter_price(data)
-        
-        # Wavelet analysis for longer time series
-        if len(data) > 100:
-            data = indicators.wavelet_analysis(data)
-    
-    # Fibonacci levels
-    fib_levels = indicators.calculate_fibonacci_retracement(data)
-    
-    # AI Predictions
-    if enable_ai:
-        with st.spinner("🤖 AI is analyzing market trends..."):
-            future_predictions = ai_predictor.predict_price_lstm(data)
-            ml_trend = ai_predictor.detect_trend_ml(data)
-    else:
-        ml_trend = "AI disabled"
-        future_predictions = np.array([data['Close'].iloc[-1]] * 10)
-    
-    # Multi-timeframe analysis
-    mtf_analysis = multi_timeframe_analysis(data, symbol)
-    
-    # Check alerts
-    if enable_alerts:
-        triggered_alerts = alert_system.check_alerts(data, symbol)
-    else:
-        triggered_alerts = []
-    
-    # Update portfolio
-    current_prices = {symbol.split('/')[0]: data['Close'].iloc[-1]}
-    portfolio_value, total_pnl = portfolio_manager.update_portfolio(current_prices)
-    
-    # Supply/Demand analysis
     up = data[data["Close"] >= data["Open"]]
     down = data[data["Close"] < data["Open"]]
 
@@ -931,11 +363,8 @@ with main_container:
     supply_idx_filtered = [i for i in supply_idx if data['Volume'].iloc[i] > data['Volume_MA20'].iloc[i]]
     demand_idx_filtered = [i for i in demand_idx if data['Volume'].iloc[i] > data['Volume_MA20'].iloc[i]]
 
-    # -------------------------------
-    # Enhanced Metrics Display
-    # -------------------------------
+    # Display some metrics
     col1, col2, col3, col4 = st.columns(4)
-    
     with col1:
         st.markdown(f"""
         <div class="metric-card">
@@ -956,17 +385,9 @@ with main_container:
         """, unsafe_allow_html=True)
     
     with col3:
-        current_rsi = data['rsi'].iloc[-1] if not pd.isna(data['rsi'].iloc[-1]) else 50
-        rsi_color = ERROR if current_rsi > 70 else (ACCENT if current_rsi < 30 else MUTED)
-        st.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-label">RSI ({rsi_period})</div>
-            <div class="metric-value" style="color:{rsi_color};">{current_rsi:.1f}</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col4:
-        current_k = data['stoch_k'].iloc[-1] if not pd.isna(data['stoch_k'].iloc[-1]) else 50
+        # Current Stochastic values
+        current_k = data['stoch_k'].iloc[-1] if not pd.isna(data['stoch_k'].iloc[-1]) else 0
+        current_d = data['stoch_d'].iloc[-1] if not pd.isna(data['stoch_d'].iloc[-1]) else 0
         stoch_color = ERROR if current_k > 80 else (ACCENT if current_k < 20 else MUTED)
         st.markdown(f"""
         <div class="metric-card">
@@ -974,35 +395,23 @@ with main_container:
             <div class="metric-value" style="color:{stoch_color};">{current_k:.1f}</div>
         </div>
         """, unsafe_allow_html=True)
-
-    # -------------------------------
-    # Alert Notifications
-    # -------------------------------
-    if triggered_alerts:
-        st.markdown("---")
-        st.subheader("🔔 Triggered Alerts")
-        for alert in triggered_alerts:
-            st.error(f"**{alert[1]}** - {alert[2]} at {alert[3]} - Triggered at {data.index[-1].strftime('%Y-%m-%d %H:%M')}")
-
-    # -------------------------------
-    # Advanced Chart with Multiple Indicators
-    # -------------------------------
-    # Determine number of subplots based on enabled features
-    num_rows = 3
-    row_heights = [0.60, 0.20, 0.20]
-    subplot_titles = ['Price Chart', 'Volume', 'Oscillators']
     
-    if enable_advanced_indicators and 'macd' in data:
-        num_rows = 4
-        row_heights = [0.50, 0.15, 0.15, 0.20]
-        subplot_titles = ['Price Chart', 'Volume', 'MACD', 'Stochastic & RSI']
+    with col4:
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-label">Stochastic %D</div>
+            <div class="metric-value" style="color:{stoch_color};">{current_d:.1f}</div>
+        </div>
+        """, unsafe_allow_html=True)
 
+    # -------------------------------
+    # Enhanced Chart with Stochastic
+    # -------------------------------
     fig = make_subplots(
-        rows=num_rows, cols=1, 
-        shared_xaxes=True,
-        vertical_spacing=0.03,
-        row_heights=row_heights,
-        subplot_titles=subplot_titles
+        rows=3, cols=1, shared_xaxes=True,
+        vertical_spacing=0.05,
+        row_heights=[0.60, 0.20, 0.20],
+        subplot_titles=('Price Chart with Supply/Demand Zones', 'Volume', 'Stochastic Oscillator')
     )
 
     # Price chart (row 1)
@@ -1014,35 +423,11 @@ with main_container:
         close=data['Close'],
         name="Price",
         increasing_line_color="#26A69A",
-        decreasing_line_color="#EF5350"
+        decreasing_line_color="#EF5350",
+        increasing_fillcolor="#26A69A",
+        decreasing_fillcolor="#EF5350"
     ), row=1, col=1)
 
-    # Add advanced indicators if enabled
-    if enable_advanced_indicators:
-        # Bollinger Bands
-        if 'bb_upper' in data:
-            fig.add_trace(go.Scatter(
-                x=data.index, y=data['bb_upper'],
-                line=dict(color='rgba(255,255,255,0.3)', width=1),
-                name='BB Upper', showlegend=False
-            ), row=1, col=1)
-            
-            fig.add_trace(go.Scatter(
-                x=data.index, y=data['bb_lower'],
-                line=dict(color='rgba(255,255,255,0.3)', width=1),
-                fill='tonexty', fillcolor='rgba(100,100,100,0.1)',
-                name='Bollinger Bands'
-            ), row=1, col=1)
-        
-        # Kalman Filter
-        if 'kalman_price' in data:
-            fig.add_trace(go.Scatter(
-                x=data.index, y=data['kalman_price'],
-                line=dict(color='yellow', width=2),
-                name='Kalman Filter'
-            ), row=1, col=1)
-
-    # Supply/Demand zones
     data["Candle_Range"] = data["High"] - data["Low"]
     avg_range = data["Candle_Range"].mean() if len(data)>0 else 0
     offset = avg_range * 0.2
@@ -1051,52 +436,67 @@ with main_container:
         x=data.index[supply_idx_filtered],
         y=data['High'].iloc[supply_idx_filtered] + offset,
         mode='markers',
-        marker=dict(symbol='triangle-down', color='rgba(251,113,133,0.95)', size=10),
-        name='Supply Zone'
+        marker=dict(symbol='triangle-down', color='rgba(251,113,133,0.95)', size=14, line=dict(width=2, color='white')),
+        name='Supply Zone',
+        hovertemplate='<b>Supply Zone</b><br>Price: %{y:.2f}<br>Time: %{x}<extra></extra>'
     ), row=1, col=1)
 
     fig.add_trace(go.Scatter(
         x=data.index[demand_idx_filtered],
         y=data['Low'].iloc[demand_idx_filtered] - offset,
         mode='markers',
-        marker=dict(symbol='triangle-up', color='rgba(110,231,183,0.95)', size=10),
-        name='Demand Zone'
+        marker=dict(symbol='triangle-up', color='rgba(110,231,183,0.95)', size=14, line=dict(width=2, color='white')),
+        name='Demand Zone',
+        hovertemplate='<b>Demand Zone</b><br>Price: %{y:.2f}<br>Time: %{x}<extra></extra>'
     ), row=1, col=1)
 
-    # Volume (row 2)
-    fig.add_trace(go.Bar(x=up.index, y=up['Volume'], name="Up Volume", 
-                       marker_color="#26A69A", opacity=0.7), row=2, col=1)
-    fig.add_trace(go.Bar(x=down.index, y=down['Volume'], name="Down Volume", 
-                       marker_color="#EF5350", opacity=0.7), row=2, col=1)
-    fig.add_trace(go.Scatter(x=data.index, y=data['Volume_MA20'], name="MA20 Volume", 
-                           line=dict(color=ACCENT_SECOND, width=2)), row=2, col=1)
+    # Volume chart (row 2)
+    fig.add_trace(go.Bar(
+        x=up.index,
+        y=up['Volume'],
+        name="Up Volume",
+        marker_color="#26A69A",
+        opacity=0.8
+    ), row=2, col=1)
+    
+    fig.add_trace(go.Bar(
+        x=down.index,
+        y=down['Volume'],
+        name="Down Volume",
+        marker_color="#EF5350",
+        opacity=0.8
+    ), row=2, col=1)
 
-    # MACD (row 3 if enabled)
-    if enable_advanced_indicators and 'macd' in data and num_rows >= 3:
-        fig.add_trace(go.Scatter(x=data.index, y=data['macd'], name="MACD", 
-                               line=dict(color=ACCENT, width=2)), row=3, col=1)
-        fig.add_trace(go.Scatter(x=data.index, y=data['macd_signal'], name="Signal", 
-                               line=dict(color=ERROR, width=2)), row=3, col=1)
-        fig.add_trace(go.Bar(x=data.index, y=data['macd_histogram'], name="Histogram", 
-                           marker_color=np.where(data['macd_histogram'] >= 0, '#26A69A', '#EF5350'),
-                           opacity=0.6), row=3, col=1)
+    fig.add_trace(go.Scatter(
+        x=data.index,
+        y=data['Volume_MA20'],
+        mode="lines",
+        name="MA20 Volume",
+        line=dict(color="rgba(96,165,250,0.95)", width=2, dash='dash')
+    ), row=2, col=1)
 
-    # Stochastic & RSI (last row)
-    last_row = num_rows
-    if 'stoch_k' in data:
-        fig.add_trace(go.Scatter(x=data.index, y=data['stoch_k'], name="%K", 
-                               line=dict(color=ACCENT, width=1)), row=last_row, col=1)
-        fig.add_trace(go.Scatter(x=data.index, y=data['stoch_d'], name="%D", 
-                               line=dict(color=ACCENT_SECOND, width=1)), row=last_row, col=1)
-        fig.add_hline(y=80, line_dash="dash", line_color=ERROR, row=last_row, col=1)
-        fig.add_hline(y=20, line_dash="dash", line_color=ACCENT, row=last_row, col=1)
+    # Stochastic chart (row 3)
+    fig.add_trace(go.Scatter(
+        x=data.index,
+        y=data['stoch_k'],
+        mode="lines",
+        name="%K",
+        line=dict(color=ACCENT, width=2),
+        hovertemplate='%K: %{y:.2f}<extra></extra>'
+    ), row=3, col=1)
 
-    if 'rsi' in data:
-        # Add RSI to secondary y-axis
-        fig.add_trace(go.Scatter(x=data.index, y=data['rsi'], name="RSI", 
-                               line=dict(color=WARNING, width=2)), row=last_row, col=1)
-        fig.add_hline(y=70, line_dash="dash", line_color=ERROR, row=last_row, col=1)
-        fig.add_hline(y=30, line_dash="dash", line_color=ACCENT, row=last_row, col=1)
+    fig.add_trace(go.Scatter(
+        x=data.index,
+        y=data['stoch_d'],
+        mode="lines",
+        name="%D",
+        line=dict(color=ACCENT_SECOND, width=2),
+        hovertemplate='%D: %{y:.2f}<extra></extra>'
+    ), row=3, col=1)
+
+    # Add overbought/oversold lines
+    fig.add_hline(y=80, line_dash="dash", line_color=ERROR, opacity=0.7, row=3, col=1, annotation_text="Overbought")
+    fig.add_hline(y=20, line_dash="dash", line_color=ACCENT, opacity=0.7, row=3, col=1, annotation_text="Oversold")
 
     fig.update_layout(
         template="plotly_dark",
@@ -1105,141 +505,78 @@ with main_container:
         font=dict(family="Inter, Poppins, sans-serif", color=TEXT, size=12),
         xaxis_rangeslider_visible=False,
         showlegend=True,
-        height=800 if num_rows == 3 else 1000,
-        hovermode='x unified'
+        height=900,
+        barmode="overlay",
+        hovermode='x unified',
+        legend=dict(
+            orientation='h', 
+            yanchor='bottom', 
+            y=1.02, 
+            xanchor='right', 
+            x=1,
+            bgcolor='rgba(11,18,32,0.7)',
+            bordercolor='rgba(255,255,255,0.1)',
+            borderwidth=1
+        ),
+        margin=dict(l=40, r=24, t=60, b=40),
+        transition={'duration': 400, 'easing': 'cubic-in-out'}
     )
+
+    fig.update_xaxes(showgrid=False, zeroline=False, showline=True, linewidth=0.6, linecolor="#1f2937")
+    fig.update_yaxes(showgrid=True, gridwidth=0.4, gridcolor='rgba(255,255,255,0.03)', zeroline=False, showline=False)
+    
+    # Update subplot titles
+    fig.update_annotations(font_size=16, font_color=ACCENT)
 
     st.markdown("<div class='streamlit-card chart-container'>", unsafe_allow_html=True)
     st.plotly_chart(fig, use_container_width=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # -------------------------------
-    # Advanced Analysis Tabs
-    # -------------------------------
-    tab_names = ["📈 AI Analysis", "📊 Multi-Timeframe", "💼 Portfolio", "📋 Technical Summary"]
-    tabs = st.tabs(tab_names)
-
-    with tabs[0]:
-        st.subheader("🤖 AI & Machine Learning Analysis")
-        
-        if enable_ai:
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.markdown("**Price Prediction**")
-                if len(data) > 50:
-                    future_dates = [data.index[-1] + timedelta(hours=i) for i in range(1, 11)]
-                    prediction_df = pd.DataFrame({
-                        'Date': future_dates,
-                        'Predicted Price': future_predictions
-                    })
-                    
-                    st.line_chart(prediction_df.set_index('Date'))
-                    
-                    current_price = data['Close'].iloc[-1]
-                    predicted_change = ((future_predictions[-1] - current_price) / current_price) * 100
-                    
-                    st.metric("10-period Prediction", f"${future_predictions[-1]:.2f}", 
-                             f"{predicted_change:+.2f}%")
-            
-            with col2:
-                st.markdown("**Trend Analysis**")
-                st.info(f"**AI Trend Detection:** {ml_trend}")
-                
-                # Technical signals summary
-                signals = []
-                current_rsi = data['rsi'].iloc[-1] if not pd.isna(data['rsi'].iloc[-1]) else 50
-                current_stoch = data['stoch_k'].iloc[-1] if not pd.isna(data['stoch_k'].iloc[-1]) else 50
-                
-                if current_rsi < 30:
-                    signals.append(("RSI Oversold", "Bullish", ACCENT))
-                if current_rsi > 70:
-                    signals.append(("RSI Overbought", "Bearish", ERROR))
-                if current_stoch < 20:
-                    signals.append(("Stochastic Oversold", "Bullish", ACCENT))
-                if current_stoch > 80:
-                    signals.append(("Stochastic Overbought", "Bearish", ERROR))
-                
-                for signal, trend, color in signals:
-                    st.markdown(f"<div style='background:{color}20; padding:10px; border-radius:5px; margin:5px;'>"
-                               f"<strong>{signal}</strong> - {trend}</div>", unsafe_allow_html=True)
-        else:
-            st.warning("AI features are disabled. Enable them in the sidebar.")
-
-    with tabs[1]:
-        st.subheader("Multi-Timeframe Analysis")
-        if mtf_analysis:
-            for timeframe, analysis in mtf_analysis.items():
-                with st.expander(f"{timeframe} Timeframe"):
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        st.metric("Trend", analysis['trend'])
-                        st.metric("Support", f"${analysis['support']:.2f}")
-                    with col2:
-                        st.metric("Price Change", f"{analysis['price_change']:+.2f}%")
-                        st.metric("Resistance", f"${analysis['resistance']:.2f}")
-                    with col3:
-                        st.metric("Volatility", f"{analysis['volatility']:.2%}")
-                        st.metric("Volume", analysis['volume_trend'])
-
-    with tabs[2]:
-        st.subheader("Portfolio Management")
-        
-        portfolio_data = portfolio_manager.get_portfolio_summary()
-        
-        if portfolio_data:
-            # Create DataFrame for better display
-            portfolio_df = pd.DataFrame(portfolio_data, 
-                                      columns=['ID', 'Symbol', 'Quantity', 'Entry', 'Current', 'P&L', 'Timestamp'])
-            portfolio_df['P&L %'] = (portfolio_df['P&L'] / (portfolio_df['Entry'] * portfolio_df['Quantity'])) * 100
-            
-            st.dataframe(portfolio_df.style.format({
-                'Entry': '${:.2f}',
-                'Current': '${:.2f}',
-                'P&L': '${:.2f}',
-                'P&L %': '{:.2f}%'
-            }))
-            
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("Total Value", f"${portfolio_value:,.2f}")
-            with col2:
-                st.metric("Total P&L", f"${total_pnl:,.2f}")
-            with col3:
-                st.metric("Return", f"{(total_pnl/portfolio_manager.initial_balance)*100:.2f}%")
-        else:
-            st.info("No positions in portfolio. Add positions from the sidebar.")
-
-    with tabs[3]:
-        st.subheader("Technical Summary")
-        
-        col1, col2 = st.columns(2)
+    # Add some summary information
+    with st.expander("📈 View Data Summary"):
+        col1, col2, col3 = st.columns(3)
         
         with col1:
-            st.markdown("**Basic Statistics**")
             st.metric("Total Candles", len(data))
-            st.metric("Average Volume", f"{data['Volume'].mean():.0f}")
-            st.metric("Volatility (ATR)", f"{(data['High'] - data['Low']).mean():.2f}")
-            st.metric("Price Range", f"${data['Low'].min():.2f} - ${data['High'].max():.2f}")
-        
+            st.metric("Average Volume", f"{data['Volume'].mean():.2f}")
+            
         with col2:
-            st.markdown("**Advanced Metrics**")
-            if 'volatility' in data:
-                st.metric("Annual Volatility", f"{data['volatility'].iloc[-1] * np.sqrt(252):.2%}")
-            if 'sharpe_ratio' in data:
-                st.metric("Sharpe Ratio", f"{data['sharpe_ratio'].iloc[-1]:.2f}")
-            if 'skewness' in data:
-                st.metric("Skewness", f"{data['skewness'].iloc[-1]:.3f}")
-            if 'kurtosis' in data:
-                st.metric("Kurtosis", f"{data['kurtosis'].iloc[-1]:.3f}")
+            st.metric("Highest Price", f"{data['High'].max():.2f}")
+            st.metric("Lowest Price", f"{data['Low'].min():.2f}")
+            
+        with col3:
+            st.metric("Price Change", f"{(data['Close'].iloc[-1] - data['Open'].iloc[0]):.2f}")
+            st.metric("Change %", f"{((data['Close'].iloc[-1] - data['Open'].iloc[0]) / data['Open'].iloc[0] * 100):.2f}%")
+        
+        # Stochastic summary
+        st.markdown("---")
+        st.subheader("Stochastic Oscillator Summary")
+        col4, col5, col6 = st.columns(3)
+        
+        with col4:
+            current_k = data['stoch_k'].iloc[-1] if not pd.isna(data['stoch_k'].iloc[-1]) else 0
+            current_d = data['stoch_d'].iloc[-1] if not pd.isna(data['stoch_d'].iloc[-1]) else 0
+            st.metric("Current %K", f"{current_k:.2f}")
+            st.metric("Current %D", f"{current_d:.2f}")
+            
+        with col5:
+            stoch_signal = "Overbought" if current_k > 80 else ("Oversold" if current_k < 20 else "Neutral")
+            stoch_color = ERROR if current_k > 80 else (ACCENT if current_k < 20 else MUTED)
+            st.markdown(f"**Signal:** <span style='color:{stoch_color}'>{stoch_signal}</span>", unsafe_allow_html=True)
+            
+            # Cross signal
+            if not pd.isna(data['stoch_k'].iloc[-1]) and not pd.isna(data['stoch_k'].iloc[-2]):
+                if data['stoch_k'].iloc[-1] > data['stoch_d'].iloc[-1] and data['stoch_k'].iloc[-2] <= data['stoch_d'].iloc[-2]:
+                    st.markdown("**Cross:** <span style='color:#6EE7B7'>Bullish (K above D)</span>", unsafe_allow_html=True)
+                elif data['stoch_k'].iloc[-1] < data['stoch_d'].iloc[-1] and data['stoch_k'].iloc[-2] >= data['stoch_d'].iloc[-2]:
+                    st.markdown("**Cross:** <span style='color:#FB7185'>Bearish (K below D)</span>", unsafe_allow_html=True)
+                else:
+                    st.markdown("**Cross:** No significant cross")
+                    
+        with col6:
+            st.markdown("**Stochastic Ranges:**")
+            st.markdown("- **Oversold:** < 20")
+            st.markdown("- **Neutral:** 20-80")
+            st.markdown("- **Overbought:** > 80")
 
-# -------------------------------
-# Footer
-# -------------------------------
-st.markdown("---")
-st.markdown("""
-<div style='text-align: center; color: #98A4B3; font-size: 12px;'>
-    <p>Advanced Trading Analytics Platform • Built with Streamlit • Using PyKalman, Wavelets, and AI</p>
-    <p>⚠️ This is for educational purposes only. Trade at your own risk.</p>
-</div>
-""", unsafe_allow_html=True)
+# End of file
