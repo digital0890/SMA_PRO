@@ -147,19 +147,31 @@ st.markdown(f"<style>{CUSTOM_CSS}</style>", unsafe_allow_html=True)
 st.set_page_config(layout="wide", page_title="Crypto & Gold Supply/Demand Analysis", page_icon="📊")
 
 # -------------------------------
-# Stochastic Oscillator Function
+# Stochastic Oscillator with Derivative Function
 # -------------------------------
-def calculate_stochastic(data, k_period=14, d_period=3):
+def calculate_stochastic_with_derivative(data, k_period=14, d_period=3, derivative_period=5):
     """
-    Calculate Stochastic Oscillator
+    Calculate Stochastic Oscillator with Derivative
     %K = (Current Close - Lowest Low) / (Highest High - Lowest Low) * 100
     %D = 3-day SMA of %K
+    Derivative = Rate of change of %K
     """
     low_min = data['Low'].rolling(window=k_period).min()
     high_max = data['High'].rolling(window=k_period).max()
     
+    # Calculate basic Stochastic
     data['stoch_k'] = ((data['Close'] - low_min) / (high_max - low_min)) * 100
     data['stoch_d'] = data['stoch_k'].rolling(window=d_period).mean()
+    
+    # Calculate derivative (rate of change)
+    data['stoch_derivative'] = data['stoch_k'].diff(derivative_period) / derivative_period
+    
+    # Calculate second derivative (acceleration)
+    data['stoch_second_derivative'] = data['stoch_derivative'].diff(derivative_period) / derivative_period
+    
+    # Calculate momentum signals
+    data['stoch_momentum'] = data['stoch_k'].diff(1)
+    data['stoch_trend'] = data['stoch_momentum'].rolling(window=3).mean()
     
     return data
 
@@ -191,6 +203,18 @@ with st.sidebar:
         k_period = st.slider("**%K Period**", 5, 21, 14, help="Period for %K line")
     with col2:
         d_period = st.slider("**%D Period**", 2, 7, 3, help="Period for %D line (SMA of %K)")
+    
+    st.markdown("---")
+    
+    # Derivative parameters
+    st.markdown("**Derivative Parameters**")
+    col3, col4 = st.columns(2)
+    with col3:
+        derivative_period = st.slider("**Derivative Period**", 1, 10, 3, 
+                                    help="Period for calculating rate of change")
+    with col4:
+        smooth_period = st.slider("**Smooth Period**", 1, 5, 2, 
+                                help="Smoothing period for derivative")
     
     st.markdown("---")
     
@@ -341,8 +365,16 @@ with main_container:
     # -------------------------------
     data["Volume_MA20"] = data["Volume"].rolling(window=20).mean()
     
-    # Calculate Stochastic Oscillator
-    data = calculate_stochastic(data, k_period, d_period)
+    # Calculate Stochastic Oscillator with Derivative
+    data = calculate_stochastic_with_derivative(data, k_period, d_period, derivative_period)
+    
+    # Apply smoothing to derivative if needed
+    if smooth_period > 1:
+        data['stoch_derivative_smooth'] = data['stoch_derivative'].rolling(window=smooth_period).mean()
+        data['stoch_second_derivative_smooth'] = data['stoch_second_derivative'].rolling(window=smooth_period).mean()
+    else:
+        data['stoch_derivative_smooth'] = data['stoch_derivative']
+        data['stoch_second_derivative_smooth'] = data['stoch_second_derivative']
     
     up = data[data["Close"] >= data["Open"]]
     down = data[data["Close"] < data["Open"]]
@@ -402,14 +434,57 @@ with main_container:
         </div>
         """, unsafe_allow_html=True)
 
+    # Additional metrics for derivative
+    col5, col6, col7, col8 = st.columns(4)
+
+    with col5:
+        current_derivative = data['stoch_derivative_smooth'].iloc[-1] if not pd.isna(data['stoch_derivative_smooth'].iloc[-1]) else 0
+        deriv_color = ACCENT if current_derivative > 0 else ERROR
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-label">Stoch Derivative</div>
+            <div class="metric-value" style="color:{deriv_color};">{current_derivative:+.2f}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col6:
+        current_second_deriv = data['stoch_second_derivative_smooth'].iloc[-1] if not pd.isna(data['stoch_second_derivative_smooth'].iloc[-1]) else 0
+        second_deriv_color = ACCENT if current_second_deriv > 0 else ERROR
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-label">Stoch Acceleration</div>
+            <div class="metric-value" style="color:{second_deriv_color};">{current_second_deriv:+.2f}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col7:
+        current_momentum = data['stoch_momentum'].iloc[-1] if not pd.isna(data['stoch_momentum'].iloc[-1]) else 0
+        momentum_color = ACCENT if current_momentum > 0 else ERROR
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-label">Stoch Momentum</div>
+            <div class="metric-value" style="color:{momentum_color};">{current_momentum:+.2f}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col8:
+        trend_direction = "Bullish" if data['stoch_trend'].iloc[-1] > 0 else "Bearish" if data['stoch_trend'].iloc[-1] < 0 else "Neutral"
+        trend_color = ACCENT if trend_direction == "Bullish" else ERROR if trend_direction == "Bearish" else MUTED
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-label">Stoch Trend</div>
+            <div class="metric-value" style="color:{trend_color};">{trend_direction}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
     # -------------------------------
-    # Enhanced Chart with Stochastic
+    # Enhanced Chart with Stochastic and Derivative
     # -------------------------------
     fig = make_subplots(
-        rows=3, cols=1, shared_xaxes=True,
-        vertical_spacing=0.05,
-        row_heights=[0.60, 0.20, 0.20],
-        subplot_titles=('Price Chart with Supply/Demand Zones', 'Volume', 'Stochastic Oscillator')
+        rows=4, cols=1, shared_xaxes=True,
+        vertical_spacing=0.04,
+        row_heights=[0.50, 0.15, 0.15, 0.20],
+        subplot_titles=('Price Chart with Supply/Demand Zones', 'Volume', 'Stochastic Oscillator', 'Stochastic Derivative')
     )
 
     # Price chart (row 1)
@@ -492,9 +567,33 @@ with main_container:
         hovertemplate='%D: %{y:.2f}<extra></extra>'
     ), row=3, col=1)
 
-    # Add overbought/oversold lines
+    # Add overbought/oversold lines to stochastic
     fig.add_hline(y=80, line_dash="dash", line_color=ERROR, opacity=0.7, row=3, col=1, annotation_text="Overbought")
     fig.add_hline(y=20, line_dash="dash", line_color=ACCENT, opacity=0.7, row=3, col=1, annotation_text="Oversold")
+
+    # Derivative chart (row 4)
+    # First derivative
+    fig.add_trace(go.Scatter(
+        x=data.index,
+        y=data['stoch_derivative_smooth'],
+        mode="lines",
+        name="Stoch Derivative",
+        line=dict(color="#FFA726", width=2),
+        hovertemplate='Derivative: %{y:.3f}<extra></extra>'
+    ), row=4, col=1)
+
+    # Second derivative (acceleration)
+    fig.add_trace(go.Scatter(
+        x=data.index,
+        y=data['stoch_second_derivative_smooth'],
+        mode="lines",
+        name="Stoch Acceleration",
+        line=dict(color="#AB47BC", width=2, dash='dot'),
+        hovertemplate='Acceleration: %{y:.3f}<extra></extra>'
+    ), row=4, col=1)
+
+    # Zero line for derivative
+    fig.add_hline(y=0, line_dash="solid", line_color=MUTED, opacity=0.9, row=4, col=1)
 
     fig.update_layout(
         template="plotly_dark",
@@ -503,7 +602,7 @@ with main_container:
         font=dict(family="Inter, Poppins, sans-serif", color=TEXT, size=12),
         xaxis_rangeslider_visible=False,
         showlegend=True,
-        height=900,
+        height=1000,
         barmode="overlay",
         hovermode='x unified',
         legend=dict(
@@ -576,5 +675,36 @@ with main_container:
             st.markdown("- **Oversold:** < 20")
             st.markdown("- **Neutral:** 20-80")
             st.markdown("- **Overbought:** > 80")
+        
+        # Derivative summary
+        st.markdown("---")
+        st.subheader("Stochastic Derivative Analysis")
+        col7, col8, col9 = st.columns(3)
+
+        with col7:
+            st.metric("Current Derivative", f"{current_derivative:.3f}")
+            st.metric("Derivative MA5", f"{data['stoch_derivative_smooth'].tail(5).mean():.3f}")
+            
+        with col8:
+            deriv_signal = "Increasing" if current_derivative > 0.1 else ("Decreasing" if current_derivative < -0.1 else "Stable")
+            deriv_color = ACCENT if current_derivative > 0.1 else (ERROR if current_derivative < -0.1 else MUTED)
+            st.markdown(f"**Derivative Signal:** <span style='color:{deriv_color}'>{deriv_signal}</span>", unsafe_allow_html=True)
+            
+            accel_signal = "Accelerating" if current_second_deriv > 0.05 else ("Decelerating" if current_second_deriv < -0.05 else "Constant")
+            accel_color = ACCENT if current_second_deriv > 0.05 else (ERROR if current_second_deriv < -0.05 else MUTED)
+            st.markdown(f"**Acceleration:** <span style='color:{accel_color}'>{accel_signal}</span>", unsafe_allow_html=True)
+
+        with col9:
+            st.markdown("**Derivative Interpretation:**")
+            if current_derivative > 0.2 and current_second_deriv > 0.05:
+                st.markdown("📈 **Strong Bullish Momentum**")
+            elif current_derivative > 0.2 and current_second_deriv < -0.05:
+                st.markdown("⚠️ **Bullish but Slowing**")
+            elif current_derivative < -0.2 and current_second_deriv < -0.05:
+                st.markdown("📉 **Strong Bearish Momentum**")
+            elif current_derivative < -0.2 and current_second_deriv > 0.05:
+                st.markdown("⚠️ **Bearish but Slowing**")
+            else:
+                st.markdown("➡️ **Neutral Momentum**")
 
 # End of file
